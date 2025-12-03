@@ -21,14 +21,12 @@ class RegistrarInmuebleScreen extends StatefulWidget {
 
 class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _tituloController = TextEditingController();
   final _descripcionController = TextEditingController();
   final _precioController = TextEditingController();
 
   bool _disponible = true;
   String? _categoriaSeleccionada;
-
   int _camas = 1;
   int _banos = 1;
   String _tamano = 'Pequeño';
@@ -41,25 +39,32 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
   Position? _ubicacionActual;
   String _mensajeUbicacion = '';
-
   List<XFile> _imagenesSeleccionadas = [];
 
   InputDecoration _decoracionCampo(String label, IconData? icon) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: icon != null ? Icon(icon) : null,
+      labelStyle: TextStyle(color: MiTema.azul),
+      prefixIcon: icon != null ? Icon(icon, color: MiTema.celeste) : null,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: MiTema.celeste.withOpacity(0.6)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide(color: MiTema.azul, width: 1.8),
+      ),
       filled: true,
-      fillColor: Colors.grey.shade50,
+      fillColor: MiTema.blanco,
     );
   }
 
   Future<void> seleccionarImagenes() async {
     final picker = ImagePicker();
     final imagenes = await picker.pickMultiImage();
-
     if (imagenes.isNotEmpty) {
       setState(() {
         _imagenesSeleccionadas = imagenes;
@@ -76,8 +81,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
       setState(() {
         _ubicacionActual = posicion;
         _mensajeUbicacion =
-            'Ubicación obtenida: Lat ${posicion.latitude.toStringAsFixed(5)}, '
-            'Lng ${posicion.longitude.toStringAsFixed(5)}';
+            'Ubicación obtenida: Lat ${posicion.latitude.toStringAsFixed(5)}, Lng ${posicion.longitude.toStringAsFixed(5)}';
       });
     } catch (e) {
       setState(() {
@@ -110,8 +114,8 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     final titulo = _tituloController.text.trim();
     final descripcion = _descripcionController.text.trim();
     final precioTexto = _precioController.text.trim();
-
     final precio = double.tryParse(precioTexto.replaceAll(',', '.'));
+
     if (precio == null || precio <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingresa un precio válido')),
@@ -124,7 +128,6 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
     try {
       final db = await BaseDatos.conecta();
-
       await db.insert('inmuebles', {
         'titulo': titulo,
         'descripcion': descripcion,
@@ -142,11 +145,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Inmueble guardado correctamente')),
       );
-
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-
       if (e is DatabaseException) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al guardar inmueble: $e')),
@@ -172,10 +173,13 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: MiTema.crema,
       appBar: AppBar(
-        backgroundColor: MiTema.vino,
-        title: Text('Nuevo inmueble', style: TextStyle(color: MiTema.crema)),
+        backgroundColor: MiTema.azul,
+        title: Text(
+          'Nuevo inmueble',
+          style: TextStyle(color: MiTema.crema),
+        ),
         centerTitle: true,
         iconTheme: IconThemeData(color: MiTema.crema),
       ),
@@ -187,6 +191,8 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
               constraints: const BoxConstraints(maxWidth: 520),
               child: Card(
                 elevation: 6,
+                color: MiTema.blanco,
+                shadowColor: MiTema.celeste.withOpacity(0.4),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
@@ -202,26 +208,30 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           style: Theme.of(context)
                               .textTheme
                               .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: MiTema.azul,
+                              ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Completa la información para publicar tu propiedad.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: Colors.grey[600]),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: MiTema.celeste,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
-                        const Divider(),
+                        Divider(color: MiTema.celeste.withOpacity(0.4)),
                         const SizedBox(height: 16),
 
                         // Título
                         TextFormField(
                           controller: _tituloController,
                           decoration: _decoracionCampo(
-                              'Título del inmueble', Icons.home_outlined),
+                            'Título del inmueble',
+                            Icons.home_outlined,
+                          ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Ingresa un título';
@@ -236,7 +246,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           controller: _descripcionController,
                           maxLines: 3,
                           decoration: _decoracionCampo(
-                              'Descripción', Icons.notes_outlined),
+                            'Descripción',
+                            Icons.notes_outlined,
+                          ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Ingresa una descripción';
@@ -251,15 +263,19 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           controller: _precioController,
                           keyboardType:
                               const TextInputType.numberWithOptions(
-                                  decimal: true),
+                            decimal: true,
+                          ),
                           decoration: _decoracionCampo(
-                              'Precio mensual', Icons.attach_money),
+                            'Precio mensual',
+                            Icons.attach_money,
+                          ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Ingresa un precio';
                             }
                             final v = double.tryParse(
-                                value.trim().replaceAll(',', '.'));
+                              value.trim().replaceAll(',', '.'),
+                            );
                             if (v == null || v <= 0) {
                               return 'Ingresa un precio válido';
                             }
@@ -270,12 +286,14 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // Categoría
                         DropdownButtonFormField<String>(
-                          initialValue: _categoriaSeleccionada,
+                          value: _categoriaSeleccionada,
                           decoration: _decoracionCampo(
-                              'Categoría', Icons.apartment),
+                            'Categoría',
+                            Icons.apartment,
+                          ),
                           items: _categorias
                               .map(
-                                (cat) => DropdownMenuItem<String>(
+                                (cat) => DropdownMenuItem(
                                   value: cat,
                                   child: Text(cat),
                                 ),
@@ -297,14 +315,18 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // CAMAS
                         DropdownButtonFormField<int>(
-                          initialValue: _camas,
-                          decoration:
-                              _decoracionCampo('Camas', Icons.bed_outlined),
+                          value: _camas,
+                          decoration: _decoracionCampo(
+                            'Camas',
+                            Icons.bed_outlined,
+                          ),
                           items: [1, 2, 3, 4, 5]
-                              .map((num) => DropdownMenuItem<int>(
-                                    value: num,
-                                    child: Text('$num'),
-                                  ))
+                              .map(
+                                (num) => DropdownMenuItem(
+                                  value: num,
+                                  child: Text('$num'),
+                                ),
+                              )
                               .toList(),
                           onChanged: (value) =>
                               setState(() => _camas = value ?? 1),
@@ -319,14 +341,18 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // BAÑOS
                         DropdownButtonFormField<int>(
-                          initialValue: _banos,
+                          value: _banos,
                           decoration: _decoracionCampo(
-                              'Baños', Icons.bathtub_outlined),
+                            'Baños',
+                            Icons.bathtub_outlined,
+                          ),
                           items: [1, 2, 3, 4]
-                              .map((num) => DropdownMenuItem<int>(
-                                    value: num,
-                                    child: Text('$num'),
-                                  ))
+                              .map(
+                                (num) => DropdownMenuItem(
+                                  value: num,
+                                  child: Text('$num'),
+                                ),
+                              )
                               .toList(),
                           onChanged: (value) =>
                               setState(() => _banos = value ?? 1),
@@ -341,14 +367,18 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // TAMAÑO
                         DropdownButtonFormField<String>(
-                          initialValue: _tamano,
+                          value: _tamano,
                           decoration: _decoracionCampo(
-                              'Tamaño', Icons.square_foot),
+                            'Tamaño',
+                            Icons.square_foot,
+                          ),
                           items: ['Pequeño', 'Mediano', 'Grande']
-                              .map((tam) => DropdownMenuItem<String>(
-                                    value: tam,
-                                    child: Text(tam),
-                                  ))
+                              .map(
+                                (tam) => DropdownMenuItem(
+                                  value: tam,
+                                  child: Text(tam),
+                                ),
+                              )
                               .toList(),
                           onChanged: (value) =>
                               setState(() => _tamano = value ?? 'Pequeño'),
@@ -363,7 +393,10 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // Disponible
                         SwitchListTile(
-                          title: const Text('Disponible para renta'),
+                          title: Text(
+                            'Disponible para renta',
+                            style: TextStyle(color: MiTema.azul),
+                          ),
                           value: _disponible,
                           activeColor: MiTema.celeste,
                           onChanged: (value) {
@@ -383,7 +416,10 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: MiTema.azul,
+                                ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -391,12 +427,13 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: seleccionarImagenes,
-                            icon:
-                                const Icon(Icons.photo_library_outlined),
+                            icon: const Icon(Icons.photo_library_outlined),
                             label: const Text('Seleccionar imágenes'),
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                               side: BorderSide(color: MiTema.celeste),
                               foregroundColor: MiTema.celeste,
                             ),
@@ -412,11 +449,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                               separatorBuilder: (_, __) =>
                                   const SizedBox(width: 8),
                               itemBuilder: (context, index) {
-                                final img =
-                                    _imagenesSeleccionadas[index];
+                                final img = _imagenesSeleccionadas[index];
                                 return ClipRRect(
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                   child: Image.file(
                                     File(img.path),
                                     width: 220,
@@ -429,7 +464,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                         ],
                         const SizedBox(height: 16),
 
-                                                // Ubicación
+                        // Ubicación
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
@@ -437,7 +472,10 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: MiTema.azul,
+                                ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -446,11 +484,13 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           child: OutlinedButton.icon(
                             onPressed: _obtenerUbicacion,
                             icon: const Icon(Icons.gps_fixed),
-                            label: const Text('Obtener ubicación actual'),
+                            label:
+                                const Text('Obtener ubicación actual'),
                             style: OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                               side: BorderSide(color: MiTema.celeste),
                               foregroundColor: MiTema.celeste,
                             ),
@@ -463,7 +503,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                             style: TextStyle(
                               color: _ubicacionActual != null
                                   ? Colors.green
-                                  : Colors.red,
+                                  : MiTema.rojo,
                             ),
                           ),
                         ],
@@ -482,13 +522,13 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                           child: ElevatedButton(
                             onPressed: _guardarInmueble,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: MiTema.vino,
-                              padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 50, vertical: 14),
+                              backgroundColor: MiTema.celeste,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 50,
+                                vertical: 14,
+                              ),
                               shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: const Text(
@@ -496,6 +536,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
                             ),
                           ),

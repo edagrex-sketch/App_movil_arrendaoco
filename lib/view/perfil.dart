@@ -13,16 +13,25 @@ class PerfilScreen extends StatelessWidget {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cerrar sesión'),
+        backgroundColor: MiTema.blanco,
+        title: Text(
+          'Cerrar sesión',
+          style: TextStyle(color: MiTema.azul),
+        ),
         content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: MiTema.azul),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: MiTema.rojo,
+            ),
             child: const Text('Cerrar sesión'),
           ),
         ],
@@ -47,282 +56,294 @@ class PerfilScreen extends StatelessWidget {
     final nombre = SesionActual.nombre ?? 'Usuario';
     final username = nombre; // puedes separar nombre/username si quieres
 
-    return CustomScrollView(
-      slivers: [
-        // Encabezado del perfil
-        SliverToBoxAdapter(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-            color: MiTema.vino,
-            child: Column(
-              children: [
-                // Avatar
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: MiTema.crema,
-                  child: Icon(Icons.person, size: 60, color: MiTema.vino),
+    return Container(
+      color: MiTema.crema,
+      child: CustomScrollView(
+        slivers: [
+          // Encabezado del perfil
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              decoration: BoxDecoration(
+                color: MiTema.azul,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(26),
+                  bottomRight: Radius.circular(26),
                 ),
-                const SizedBox(height: 16),
-                // Nombre
-                Text(
-                  nombre,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: MiTema.crema,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  username,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: MiTema.crema.withOpacity(0.9),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-
-        // Estadísticas (por ahora valores fijos de ejemplo)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.favorite_outline,
-                    title: 'Favoritos',
-                    value: '0',
-                    color: Colors.red,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.home_outlined,
-                    title: 'Publicados',
-                    value: '0',
-                    color: MiTema.vino,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.mail_outline,
-                    title: 'Mensajes',
-                    value: '0',
-                    color: MiTema.celeste,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-        // Sección: Mis publicaciones
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mis publicaciones',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: MiTema.vino,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    // Publicar
-                    Expanded(
-                      child: _QuickActionButton(
-                        icon: Icons.add_home_work_outlined,
-                        label: 'Publicar',
-                        bgColor: MiTema.vino,
-                        onTap: () {
-                          final propietarioId = SesionActual.usuarioId ?? 1;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RegistrarInmuebleScreen(
-                                propietarioId: propietarioId,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Ver todas
-                    Expanded(
-                      child: _QuickActionButton(
-                        icon: Icons.list_outlined,
-                        label: 'Ver todas',
-                        bgColor: MiTema.celeste,
-                        onTap: () {
-                          final usuarioId = SesionActual.usuarioId ?? 1;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  ArrendadorScreen(usuarioId: usuarioId),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-        // Sección: Cuenta
-        SliverToBoxAdapter(
-          child: _SectionCard(
-            title: 'Cuenta',
-            children: [
-              _SettingsTile(
-                icon: Icons.person_outline,
-                title: 'Editar perfil',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Pantalla de editar perfil (pendiente)'),
-                    ),
-                  );
-                },
-                showDivider: false,
               ),
-            ],
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundColor: MiTema.crema,
+                    child: Icon(Icons.person, size: 60, color: MiTema.azul),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    nombre,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: MiTema.crema,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    username,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: MiTema.crema.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          // Estadísticas
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.favorite_outline,
+                      title: 'Favoritos',
+                      value: '0',
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.home_outlined,
+                      title: 'Publicados',
+                      value: '0',
+                      color: MiTema.vino,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.mail_outline,
+                      title: 'Mensajes',
+                      value: '0',
+                      color: MiTema.celeste,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-        // Sección: Preferencias
-        SliverToBoxAdapter(
-          child: _SectionCard(
-            title: 'Preferencias',
-            children: [
-              _SettingsTile(
-                icon: Icons.notifications_outlined,
-                title: 'Notificaciones',
-                trailing: Switch(
-                  value: true,
-                  onChanged: (_) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Configuración de notificaciones pendiente',
+          // Sección: Mis publicaciones
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mis publicaciones',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: MiTema.azul,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Publicar
+                      Expanded(
+                        child: _QuickActionButton(
+                          icon: Icons.add_home_work_outlined,
+                          label: 'Publicar',
+                          bgColor: MiTema.celeste,
+                          onTap: () {
+                            final propietarioId = SesionActual.usuarioId ?? 1;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    RegistrarInmuebleScreen(
+                                  propietarioId: propietarioId,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
-                  activeColor: MiTema.celeste,
-                ),
+                      const SizedBox(width: 10),
+                      // Ver todas
+                      Expanded(
+                        child: _QuickActionButton(
+                          icon: Icons.list_outlined,
+                          label: 'Ver todas',
+                          bgColor: MiTema.vino,
+                          onTap: () {
+                            final usuarioId = SesionActual.usuarioId ?? 1;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ArrendadorScreen(usuarioId: usuarioId),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              _SettingsTile(
-                icon: Icons.dark_mode_outlined,
-                title: 'Tema oscuro',
-                trailing: Switch(
-                  value: false,
-                  onChanged: (_) {
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // Sección: Cuenta
+          SliverToBoxAdapter(
+            child: _SectionCard(
+              title: 'Cuenta',
+              headerColor: MiTema.azul,
+              children: [
+                _SettingsTile(
+                  icon: Icons.person_outline,
+                  title: 'Editar perfil',
+                  onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Tema oscuro aún no implementado'),
+                        content:
+                            Text('Pantalla de editar perfil (pendiente)'),
                       ),
                     );
                   },
-                  activeColor: MiTema.celeste,
+                  showDivider: false,
                 ),
-                showDivider: false,
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-        // Sección: Soporte
-        SliverToBoxAdapter(
-          child: _SectionCard(
-            title: 'Soporte',
-            children: [
-              _SettingsTile(
-                icon: Icons.help_outline,
-                title: 'Centro de ayuda',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Centro de ayuda próximamente'),
-                    ),
-                  );
-                },
-              ),
-              _SettingsTile(
-                icon: Icons.info_outline,
-                title: 'Acerca de ArrendaOco',
-                onTap: () {
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'ArrendaOco',
-                    applicationVersion: '1.0.0',
-                    applicationIcon: Icon(Icons.home, color: MiTema.vino),
-                    children: const [
-                      Text('Aplicación para renta de inmuebles.'),
-                    ],
-                  );
-                },
-                showDivider: false,
-              ),
-            ],
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-        // Botón Cerrar sesión
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _cerrarSesion(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          // Sección: Preferencias
+          SliverToBoxAdapter(
+            child: _SectionCard(
+              title: 'Preferencias',
+              headerColor: MiTema.azul,
+              children: [
+                _SettingsTile(
+                  icon: Icons.notifications_outlined,
+                  title: 'Notificaciones',
+                  trailing: Switch(
+                    value: true,
+                    onChanged: (_) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Configuración de notificaciones pendiente',
+                          ),
+                        ),
+                      );
+                    },
+                    activeColor: MiTema.celeste,
                   ),
                 ),
-                child: const Text(
-                  'Cerrar sesión',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                _SettingsTile(
+                  icon: Icons.dark_mode_outlined,
+                  title: 'Tema oscuro',
+                  trailing: Switch(
+                    value: false,
+                    onChanged: (_) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Tema oscuro aún no implementado'),
+                        ),
+                      );
+                    },
+                    activeColor: MiTema.celeste,
+                  ),
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+          // Sección: Soporte
+          SliverToBoxAdapter(
+            child: _SectionCard(
+              title: 'Soporte',
+              headerColor: MiTema.azul,
+              children: [
+                _SettingsTile(
+                  icon: Icons.help_outline,
+                  title: 'Centro de ayuda',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Centro de ayuda próximamente'),
+                      ),
+                    );
+                  },
+                ),
+                _SettingsTile(
+                  icon: Icons.info_outline,
+                  title: 'Acerca de ArrendaOco',
+                  onTap: () {
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'ArrendaOco',
+                      applicationVersion: '1.0.0',
+                      applicationIcon:
+                          Icon(Icons.home, color: MiTema.azul),
+                      children: const [
+                        Text('Aplicación para renta de inmuebles.'),
+                      ],
+                    );
+                  },
+                  showDivider: false,
+                ),
+              ],
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // Botón Cerrar sesión
+          SliverToBoxAdapter(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _cerrarSesion(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MiTema.rojo,
+                    foregroundColor: Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cerrar sesión',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-      ],
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+        ],
+      ),
     );
   }
 }
@@ -347,9 +368,16 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: MiTema.blanco,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -364,7 +392,10 @@ class _StatCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
         ],
       ),
     );
@@ -397,6 +428,7 @@ class _QuickActionButton extends StatelessWidget {
         ),
         child: Column(
           children: [
+            const SizedBox(height: 2),
             Icon(icon, color: Colors.white, size: 24),
             const SizedBox(height: 4),
             Text(
@@ -417,20 +449,25 @@ class _QuickActionButton extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
+  final Color headerColor;
 
-  const _SectionCard({required this.title, required this.children});
+  const _SectionCard({
+    required this.title,
+    required this.children,
+    required this.headerColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: MiTema.blanco,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: const [
           BoxShadow(
-            color: Color.fromRGBO(158, 158, 158, 0.1), // gris con 10% opacidad
+            color: Color.fromRGBO(158, 158, 158, 0.1),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -443,7 +480,7 @@ class _SectionCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: MiTema.vino,
+              color: headerColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(14),
                 topRight: Radius.circular(14),
@@ -485,10 +522,13 @@ class _SettingsTile extends StatelessWidget {
     return Column(
       children: [
         ListTile(
-          leading: Icon(icon, color: MiTema.vino),
+          leading: Icon(icon, color: MiTema.azul),
           title: Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           trailing:
               trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),

@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/widgets/map_preview_osm.dart';
 import 'package:arrendaoco/model/bd.dart';
@@ -22,7 +21,6 @@ class DetalleInmuebleScreen extends StatefulWidget {
 class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
   late PageController _pageController;
   int _currentImageIndex = 0;
-
   List<Map<String, dynamic>> _resenas = [];
   double _promedioRating = 0.0;
   int _totalResenas = 0;
@@ -45,10 +43,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
       final inmuebleId = int.parse(widget.inmueble['id'].toString());
       final lista = await BaseDatos.obtenerResenasPorInmueble(inmuebleId);
       final resumen = await BaseDatos.obtenerResumenResenas(inmuebleId);
-
       if (!mounted) return;
       setState(() {
-        _resenas = lista;
+        _resenas = List<Map<String, dynamic>>.from(lista);
         _promedioRating = (resumen['promedio'] ?? 0.0) as double;
         _totalResenas = (resumen['total'] ?? 0) as int;
       });
@@ -73,19 +70,25 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     final rutasStr = (inmueble['rutas_imagen'] as String?) ?? '';
     final imagenes = rutasStr.isNotEmpty ? rutasStr.split('|') : [];
 
+    // De momento son constantes
     const camas = 2;
     const banos = 1;
     const metros = 80;
 
     return Scaffold(
+      backgroundColor: MiTema.crema,
       appBar: AppBar(
-        backgroundColor: MiTema.vino,
+        backgroundColor: MiTema.azul,
         foregroundColor: MiTema.crema,
-        title: Text(titulo, style: TextStyle(color: MiTema.crema)),
+        title: Text(
+          titulo,
+          style: TextStyle(color: MiTema.crema),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite_border),
+            color: MiTema.crema,
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Agregado a favoritos')),
@@ -131,8 +134,8 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _currentImageIndex == index
-                                  ? MiTema.vino
-                                  : Colors.grey,
+                                  ? MiTema.celeste
+                                  : Colors.white.withOpacity(0.6),
                             ),
                           ),
                         ),
@@ -165,13 +168,13 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: disponible
-                              ? Colors.green.shade100
-                              : Colors.red.shade100,
+                              ? Colors.green.shade50
+                              : MiTema.rojo.withOpacity(0.06),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: disponible
                                 ? Colors.green.shade500
-                                : Colors.red.shade500,
+                                : MiTema.rojo,
                           ),
                         ),
                         child: Text(
@@ -179,7 +182,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                           style: TextStyle(
                             color: disponible
                                 ? Colors.green.shade700
-                                : Colors.red.shade700,
+                                : MiTema.rojo,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -191,24 +194,32 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     categoria,
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.grey[700],
+                      color: MiTema.celeste,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // Características
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: MiTema.blanco,
                       borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: MiTema.celeste.withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         Column(
                           children: [
-                            Icon(Icons.bed_outlined, color: MiTema.vino),
+                            Icon(Icons.bed_outlined, color: MiTema.azul),
                             const SizedBox(height: 4),
                             const Text(
                               '$camas',
@@ -228,7 +239,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         ),
                         Column(
                           children: [
-                            Icon(Icons.bathtub_outlined, color: MiTema.vino),
+                            Icon(Icons.bathtub_outlined, color: MiTema.azul),
                             const SizedBox(height: 4),
                             const Text(
                               '$banos',
@@ -248,7 +259,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         ),
                         Column(
                           children: [
-                            Icon(Icons.square_foot, color: MiTema.vino),
+                            Icon(Icons.square_foot, color: MiTema.azul),
                             const SizedBox(height: 4),
                             const Text(
                               '$metros',
@@ -270,13 +281,14 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+
                   // Descripción
                   Text(
                     'Descripción',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: MiTema.vino,
+                      color: MiTema.azul,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -284,7 +296,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     descripcion,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[700],
+                      color: MiTema.negro.withOpacity(0.8),
                       height: 1.5,
                     ),
                   ),
@@ -300,7 +312,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: MiTema.vino,
+                      color: MiTema.azul,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -308,17 +320,20 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     height: 250,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: MiTema.celeste.withOpacity(0.4)),
                     ),
-                    child: MapPreviewOsm(
-                      lat: latitud,
-                      lng: longitud,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: MapPreviewOsm(
+                        lat: latitud,
+                        lng: longitud,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.location_on_outlined, color: MiTema.vino),
+                      Icon(Icons.location_on_outlined, color: MiTema.azul),
                       const SizedBox(width: 8),
                       Text(
                         'Lat: ${latitud.toStringAsFixed(4)}, '
@@ -330,63 +345,8 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  // Botones acción
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Contactando al propietario...'),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: MiTema.vino,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Contactar al propietario',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Abriendo calendario de reservas...'),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: MiTema.celeste),
-                        foregroundColor: MiTema.celeste,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Reservar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 20),
+                  // Aquí ya no hay botones de "Contactar al propietario" ni "Reserver"
                 ],
               ),
             ),
@@ -397,7 +357,6 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
   }
 
   // ======== SECCIÓN RESEÑAS ========
-
   Widget _buildSeccionResenas(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,7 +443,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     );
   }
 
-  Widget _buildItemResena(Map<String, dynamic> r) {
+  Widget _buildItemResena(Map r) {
     final nombre = (r['usuario_nombre'] ?? 'Anónimo').toString();
     final rating = (r['rating'] ?? 0) as int;
     final comentario = (r['comentario'] ?? '').toString();
@@ -606,7 +565,8 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 controller: comentarioController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  hintText: 'Cuenta tu experiencia (ruido, vecinos, zona, etc.)',
+                  hintText:
+                      'Cuenta tu experiencia (ruido, vecinos, zona, etc.)',
                 ),
               ),
               const SizedBox(height: 16),
@@ -615,23 +575,19 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     if (ratingSeleccionado < 1) return;
-
                     try {
                       final inmuebleId =
                           int.parse(widget.inmueble['id'].toString());
-
                       final nombreSesion = SesionActual.nombre;
-                      final nombre = (nombreSesion == null ||
-                              nombreSesion.trim().isEmpty)
-                          ? 'Anónimo'
-                          : nombreSesion.trim();
-
+                      final nombre =
+                          (nombreSesion == null || nombreSesion.trim().isEmpty)
+                              ? 'Anónimo'
+                              : nombreSesion.trim();
                       final comentario = comentarioController.text.trim();
                       final fecha = DateTime.now()
                           .toIso8601String()
                           .split('T')
                           .first;
-
                       await BaseDatos.insertarResena({
                         'inmueble_id': inmuebleId,
                         'usuario_nombre': nombre,
@@ -639,7 +595,6 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         'comentario': comentario,
                         'fecha': fecha,
                       });
-
                       if (mounted) {
                         Navigator.pop(context);
                         await _cargarResenas();
@@ -651,13 +606,14 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Error al guardar reseña: $e'),
+                          content:
+                              Text('Error al guardar reseña: $e'),
                         ),
                       );
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: MiTema.vino,
+                    backgroundColor: MiTema.celeste,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

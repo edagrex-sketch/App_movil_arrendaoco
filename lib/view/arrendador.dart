@@ -29,11 +29,13 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
     ];
 
     return Scaffold(
+      backgroundColor: MiTema.crema,
       appBar: AppBar(
         title: const Text('ArrendaOco'),
+        backgroundColor: MiTema.azul,
         foregroundColor: MiTema.crema,
-        backgroundColor: MiTema.vino,
         centerTitle: true,
+        iconTheme: IconThemeData(color: MiTema.crema),
         actions: [
           IconButton(
             tooltip: 'Notificaciones',
@@ -42,7 +44,10 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                 const SnackBar(content: Text('Notificaciones próximamente')),
               );
             },
-            icon: const Icon(Icons.notifications_outlined),
+            icon: Icon(
+              Icons.notifications_outlined,
+              color: MiTema.crema,
+            ),
           ),
         ],
       ),
@@ -61,46 +66,57 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                   // Reconstruye el feed para ver el nuevo inmueble
                 });
               },
-              backgroundColor: MiTema.vino,
+              backgroundColor: MiTema.celeste,
               icon: Icon(Icons.add_home_work_outlined, color: MiTema.blanco),
-              label: Text('Publicar', style: TextStyle(color: MiTema.blanco)),
+              label: Text(
+                'Publicar',
+                style: TextStyle(color: MiTema.blanco),
+              ),
             )
           : null,
       bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          backgroundColor: MiTema.vino,
-          indicatorColor: MiTema.vino,
+        data: const NavigationBarThemeData(
+          backgroundColor: Colors.transparent,
+          indicatorColor: Colors.transparent,
           iconTheme: MaterialStatePropertyAll(
-            IconThemeData(color: MiTema.crema),
+            IconThemeData(color: Colors.white),
           ),
           labelTextStyle: MaterialStatePropertyAll(
-            TextStyle(color: MiTema.crema, fontWeight: FontWeight.w600),
+            TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        child: NavigationBar(
-          selectedIndex: currentIndex,
-          onDestinationSelected: (i) {
-            setState(() {
-              currentIndex = i;
-            });
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Publicar',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.search_outlined),
-              selectedIcon: Icon(Icons.search),
-              label: 'Explorar',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Perfil',
-            ),
-          ],
+        child: Container(
+          color: MiTema.azul,
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            selectedIndex: currentIndex,
+            onDestinationSelected: (i) {
+              setState(() {
+                currentIndex = i;
+              });
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: 'Publicar',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.search_outlined),
+                selectedIcon: Icon(Icons.search),
+                label: 'Explorar',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: 'Perfil',
+              ),
+            ],
+          ),
         ),
       ),
       body: pages[currentIndex],
@@ -144,14 +160,19 @@ class InicioFeedState extends State<InicioFeed> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+
         if (snapshot.hasError) {
+          // ignore: avoid_print
           print(snapshot.error);
           return const Center(child: Text('Error al cargar inmuebles'));
         }
 
         final inmuebles = snapshot.data ?? [];
+
         if (inmuebles.isEmpty) {
-          return const Center(child: Text('Aún no has publicado inmuebles.'));
+          return const Center(
+            child: Text('Aún no has publicado inmuebles.'),
+          );
         }
 
         return ListView.builder(
@@ -164,13 +185,14 @@ class InicioFeedState extends State<InicioFeed> {
             final precio = i['precio'] ?? 0;
             final categoria = i['categoria'] ?? '';
             final rutas = i['rutas_imagen'] as String? ?? '';
-            final primeraRuta = rutas.isNotEmpty
-                ? rutas.split('|').first
-                : null;
+            final primeraRuta =
+                rutas.isNotEmpty ? rutas.split('|').first : null;
 
             return Card(
               elevation: 4,
               margin: const EdgeInsets.only(bottom: 16),
+              color: MiTema.blanco,
+              shadowColor: MiTema.celeste.withOpacity(0.3),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -202,15 +224,15 @@ class InicioFeedState extends State<InicioFeed> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: MiTema.vino,
+                            color: MiTema.azul,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           categoria.toString(),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey,
+                            color: MiTema.celeste,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -218,6 +240,9 @@ class InicioFeedState extends State<InicioFeed> {
                           descripcion.toString(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: MiTema.negro,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -237,7 +262,8 @@ class InicioFeedState extends State<InicioFeed> {
                                 await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => RegistrarInmuebleScreen(
+                                    builder: (context) =>
+                                        RegistrarInmuebleScreen(
                                       propietarioId: widget.usuarioId,
                                       // Más adelante puedes pasar el inmueble para edición real
                                     ),
@@ -247,8 +273,15 @@ class InicioFeedState extends State<InicioFeed> {
                                   futureInmuebles = cargarInmuebles();
                                 });
                               },
-                              icon: const Icon(Icons.edit, size: 18),
-                              label: const Text('Editar'),
+                              icon: Icon(
+                                Icons.edit,
+                                size: 18,
+                                color: MiTema.azul,
+                              ),
+                              label: Text(
+                                'Editar',
+                                style: TextStyle(color: MiTema.azul),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             TextButton.icon(
@@ -256,7 +289,11 @@ class InicioFeedState extends State<InicioFeed> {
                                 final confirmar = await showDialog<bool>(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: const Text('Eliminar inmueble'),
+                                    backgroundColor: MiTema.blanco,
+                                    title: Text(
+                                      'Eliminar inmueble',
+                                      style: TextStyle(color: MiTema.azul),
+                                    ),
                                     content: const Text(
                                       '¿Seguro que quieres eliminar este inmueble?',
                                     ),
@@ -264,13 +301,17 @@ class InicioFeedState extends State<InicioFeed> {
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, false),
-                                        child: const Text('Cancelar'),
+                                        child: Text(
+                                          'Cancelar',
+                                          style:
+                                              TextStyle(color: MiTema.azul),
+                                        ),
                                       ),
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, true),
                                         style: TextButton.styleFrom(
-                                          foregroundColor: Colors.red,
+                                          foregroundColor: MiTema.rojo,
                                         ),
                                         child: const Text('Eliminar'),
                                       ),
@@ -299,10 +340,14 @@ class InicioFeedState extends State<InicioFeed> {
                                   }
                                 }
                               },
-                              icon: const Icon(Icons.delete, size: 18),
-                              label: const Text('Eliminar'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
+                              icon: Icon(
+                                Icons.delete,
+                                size: 18,
+                                color: MiTema.rojo,
+                              ),
+                              label: Text(
+                                'Eliminar',
+                                style: TextStyle(color: MiTema.rojo),
                               ),
                             ),
                           ],
