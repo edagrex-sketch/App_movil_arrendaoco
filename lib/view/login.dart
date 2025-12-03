@@ -1,26 +1,27 @@
-import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
 import 'package:flutter/material.dart';
+import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() => LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();   // username
-  final _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
+class LoginScreenState extends State<LoginScreen> {
+  final emailController = TextEditingController(); // username
+  final passwordController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
 
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> login() async {
+    if (!formKey.currentState!.validate()) return;
 
-    final username = _emailController.text.trim();
-    final password = _passwordController.text;
+    final username = emailController.text.trim();
+    final password = passwordController.text.trim();
 
     try {
       final db = await BaseDatos.conecta();
@@ -34,7 +35,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (res.isNotEmpty) {
         final usuario = res.first;
-        print('ROW USUARIO: $usuario');
 
         final dynamic idValue = usuario['id'];
         if (idValue == null) {
@@ -54,19 +54,23 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content:
-                  Text('Tipo inesperado para id: ${idValue.runtimeType}'),
+              content: Text('Tipo inesperado para id: ${idValue.runtimeType}'),
             ),
           );
           return;
         }
 
-        if (usuarioId <= 0) {
+        if (usuarioId == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Id de usuario inválido')),
           );
           return;
         }
+
+        // GUARDAR SESIÓN
+        SesionActual.usuarioId = usuarioId;
+        SesionActual.nombre =
+            (usuario['nombre'] ?? usuario['username'] ?? '').toString();
 
         Navigator.pushReplacement(
           context,
@@ -76,9 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Usuario o contraseña incorrectos'),
-          ),
+          const SnackBar(content: Text('Usuario o contraseña incorrectos')),
         );
       }
     } catch (e) {
@@ -90,8 +92,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
     super.dispose();
   }
 
@@ -109,10 +111,10 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20.0),
         child: Form(
-          key: _formKey,
+          key: formKey,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
+            children: [
               Container(
                 padding: const EdgeInsets.all(16),
                 child: Image.asset(
@@ -121,9 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
               TextFormField(
-                controller: _emailController,
+                controller: emailController,
                 decoration: InputDecoration(
                   labelText: 'Usuario',
                   border: OutlineInputBorder(
@@ -139,9 +140,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 20),
-
               TextFormField(
-                controller: _passwordController,
+                controller: passwordController,
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
@@ -158,9 +158,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 30),
-
               ElevatedButton(
-                onPressed: _login,
+                onPressed: login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: MiTema.celeste,
                   padding:
@@ -174,7 +173,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(fontSize: 18),
                 ),
               ),
-
               TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -185,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 },
                 child: const Text(
-                  '¿No tienes cuenta? ¡Regístrate!',
+                  '¿No tienes cuenta? Regístrate!',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.black87,

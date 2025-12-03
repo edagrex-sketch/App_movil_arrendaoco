@@ -12,7 +12,7 @@ class BaseDatos {
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2, // IMPORTANTE: versión 2 para crear resenas si ya existía la BD
       onCreate: (Database db, int version) async {
         // ======== Tabla usuarios ========
         await db.execute('''
@@ -57,9 +57,103 @@ class BaseDatos {
             FOREIGN KEY (propietario_id) REFERENCES usuarios(id)
           )
         ''');
+
+        // ======== Tabla reseñas ========
+        await db.execute('''
+          CREATE TABLE resenas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inmueble_id INTEGER NOT NULL,
+            usuario_nombre TEXT,
+            rating INTEGER NOT NULL,
+            comentario TEXT,
+            fecha TEXT,
+            FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id)
+          )
+        ''');
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS resenas (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              inmueble_id INTEGER NOT NULL,
+              usuario_nombre TEXT,
+              rating INTEGER NOT NULL,
+              comentario TEXT,
+              fecha TEXT,
+              FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id)
+            )
+          ''');
+        }
       },
     );
 
     return _db!;
+  }
+
+  // ================== INMUEBLES (opcionales) ==================
+
+  static Future<int> insertarInmueble(Map<String, dynamic> data) async {
+    final db = await conecta();
+    return db.insert('inmuebles', data);
+  }
+
+  static Future<List<Map<String, dynamic>>> obtenerInmuebles() async {
+    final db = await conecta();
+    return db.query('inmuebles', orderBy: 'id DESC');
+  }
+
+  // ================== RESEÑAS ==================
+
+  static Future<int> insertarResena(Map<String, dynamic> resena) async {
+    final db = await conecta();
+    return db.insert('resenas', resena);
+  }
+
+  static Future<List<Map<String, dynamic>>> obtenerResenasPorInmueble(
+      int inmuebleId) async {
+    final db = await conecta();
+    return db.query(
+      'resenas',
+      where: 'inmueble_id = ?',
+      whereArgs: [inmuebleId],
+      orderBy: 'id DESC',
+    );
+  }
+
+  static Future<Map<String, dynamic>> obtenerResumenResenas(
+      int inmuebleId) async {
+    final db = await conecta();
+    final result = await db.rawQuery('''
+      SELECT 
+        AVG(rating) AS promedio,
+        COUNT(*) AS total
+      FROM resenas
+      WHERE inmueble_id = ?
+    ''', [inmuebleId]);
+
+    if (result.isNotEmpty) {
+      final row = result.first;
+      final promedioRaw = row['promedio'];
+      final totalRaw = row['total'];
+
+      final promedio = promedioRaw == null
+          ? 0.0
+          : (promedioRaw is int)
+              ? promedioRaw.toDouble()
+              : promedioRaw as double;
+
+      final total = totalRaw == null
+          ? 0
+          : (totalRaw is int)
+              ? totalRaw
+              : (totalRaw as num).toInt();
+
+      return {
+        'promedio': promedio,
+        'total': total,
+      };
+    }
+    return {'promedio': 0.0, 'total': 0};
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
 import 'package:arrendaoco/view/explorar.dart';
@@ -13,16 +14,16 @@ class ArrendadorScreen extends StatefulWidget {
   const ArrendadorScreen({super.key, required this.usuarioId});
 
   @override
-  State<ArrendadorScreen> createState() => _ArrendadorScreenState();
+  State<ArrendadorScreen> createState() => ArrendadorScreenState();
 }
 
-class _ArrendadorScreenState extends State<ArrendadorScreen> {
-  int _currentIndex = 0;
+class ArrendadorScreenState extends State<ArrendadorScreen> {
+  int currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _InicioFeed(usuarioId: widget.usuarioId),
+      InicioFeed(usuarioId: widget.usuarioId),
       const ExplorarScreen(),
       const PerfilScreen(),
     ];
@@ -36,13 +37,16 @@ class _ArrendadorScreenState extends State<ArrendadorScreen> {
         actions: [
           IconButton(
             tooltip: 'Notificaciones',
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Notificaciones próximamente')),
+              );
+            },
             icon: const Icon(Icons.notifications_outlined),
           ),
         ],
       ),
-
-      floatingActionButton: _currentIndex == 0
+      floatingActionButton: currentIndex == 0
           ? FloatingActionButton.extended(
               onPressed: () async {
                 await Navigator.push(
@@ -53,14 +57,15 @@ class _ArrendadorScreenState extends State<ArrendadorScreen> {
                     ),
                   ),
                 );
-                setState(() {}); // reconstruye el feed para ver el nuevo
+                setState(() {
+                  // Reconstruye el feed para ver el nuevo inmueble
+                });
               },
               backgroundColor: MiTema.vino,
               icon: Icon(Icons.add_home_work_outlined, color: MiTema.blanco),
               label: Text('Publicar', style: TextStyle(color: MiTema.blanco)),
             )
           : null,
-
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
           backgroundColor: MiTema.vino,
@@ -69,59 +74,59 @@ class _ArrendadorScreenState extends State<ArrendadorScreen> {
             IconThemeData(color: MiTema.crema),
           ),
           labelTextStyle: MaterialStatePropertyAll(
-            TextStyle(
-              color: MiTema.crema,
-              fontWeight: FontWeight.w600,
-            ),
+            TextStyle(color: MiTema.crema, fontWeight: FontWeight.w600),
           ),
         ),
         child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() => _currentIndex = i),
-          destinations: [
+          selectedIndex: currentIndex,
+          onDestinationSelected: (i) {
+            setState(() {
+              currentIndex = i;
+            });
+          },
+          destinations: const [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined, color: MiTema.crema),
-              selectedIcon: Icon(Icons.home, color: MiTema.crema),
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
               label: 'Publicar',
             ),
             NavigationDestination(
-              icon: Icon(Icons.search_outlined, color: MiTema.crema),
-              selectedIcon: Icon(Icons.search, color: MiTema.crema),
+              icon: Icon(Icons.search_outlined),
+              selectedIcon: Icon(Icons.search),
               label: 'Explorar',
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline, color: MiTema.crema),
-              selectedIcon: Icon(Icons.person, color: MiTema.crema),
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
               label: 'Perfil',
             ),
           ],
         ),
       ),
-
-      body: pages[_currentIndex],
+      body: pages[currentIndex],
     );
   }
 }
 
-class _InicioFeed extends StatefulWidget {
+class InicioFeed extends StatefulWidget {
   final int usuarioId;
 
-  const _InicioFeed({required this.usuarioId});
+  const InicioFeed({super.key, required this.usuarioId});
 
   @override
-  State<_InicioFeed> createState() => _InicioFeedState();
+  State<InicioFeed> createState() => InicioFeedState();
 }
 
-class _InicioFeedState extends State<_InicioFeed> {
-  late Future<List<Map<String, dynamic>>> _futureInmuebles;
+class InicioFeedState extends State<InicioFeed> {
+  late Future<List<Map<String, dynamic>>> futureInmuebles;
 
   @override
   void initState() {
     super.initState();
-    _futureInmuebles = _cargarInmuebles();
+    futureInmuebles = cargarInmuebles();
   }
 
-  Future<List<Map<String, dynamic>>> _cargarInmuebles() async {
+  Future<List<Map<String, dynamic>>> cargarInmuebles() async {
     final db = await BaseDatos.conecta();
     return db.query(
       'inmuebles',
@@ -134,7 +139,7 @@ class _InicioFeedState extends State<_InicioFeed> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _futureInmuebles,
+      future: futureInmuebles,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -158,9 +163,10 @@ class _InicioFeedState extends State<_InicioFeed> {
             final descripcion = i['descripcion'] ?? '';
             final precio = i['precio'] ?? 0;
             final categoria = i['categoria'] ?? '';
-            final rutas = (i['rutas_imagen'] as String?) ?? '';
-            final primeraRuta =
-                rutas.isNotEmpty ? rutas.split('|').first : null;
+            final rutas = i['rutas_imagen'] as String? ?? '';
+            final primeraRuta = rutas.isNotEmpty
+                ? rutas.split('|').first
+                : null;
 
             return Card(
               elevation: 4,
@@ -192,7 +198,7 @@ class _InicioFeedState extends State<_InicioFeed> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          titulo,
+                          titulo.toString(),
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -201,26 +207,105 @@ class _InicioFeedState extends State<_InicioFeed> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          categoria,
-                          style: TextStyle(
+                          categoria.toString(),
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[700],
+                            color: Colors.grey,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          descripcion,
+                          descripcion.toString(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '\$${precio.toString()}/mes',
+                          '\$$precio/mes',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: MiTema.vino,
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RegistrarInmuebleScreen(
+                                      propietarioId: widget.usuarioId,
+                                      // Más adelante puedes pasar el inmueble para edición real
+                                    ),
+                                  ),
+                                );
+                                setState(() {
+                                  futureInmuebles = cargarInmuebles();
+                                });
+                              },
+                              icon: const Icon(Icons.edit, size: 18),
+                              label: const Text('Editar'),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: () async {
+                                final confirmar = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Eliminar inmueble'),
+                                    content: const Text(
+                                      '¿Seguro que quieres eliminar este inmueble?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancelar'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                        child: const Text('Eliminar'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmar == true) {
+                                  final db = await BaseDatos.conecta();
+                                  await db.delete(
+                                    'inmuebles',
+                                    where: 'id = ?',
+                                    whereArgs: [i['id']],
+                                  );
+                                  setState(() {
+                                    futureInmuebles = cargarInmuebles();
+                                  });
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Inmueble eliminado correctamente',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.delete, size: 18),
+                              label: const Text('Eliminar'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

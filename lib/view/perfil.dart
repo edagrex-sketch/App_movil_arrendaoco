@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/view/login.dart';
+import 'package:arrendaoco/view/arrendador.dart';
+import 'package:arrendaoco/view/registrar_inmueble.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
 
 class PerfilScreen extends StatelessWidget {
   const PerfilScreen({super.key});
 
   Future<void> _cerrarSesion(BuildContext context) async {
-    // Mostrar diálogo de confirmación
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -19,9 +22,7 @@ class PerfilScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Cerrar sesión'),
           ),
         ],
@@ -29,7 +30,10 @@ class PerfilScreen extends StatelessWidget {
     );
 
     if (confirmar == true && context.mounted) {
-      // Limpiar datos y volver al login
+      // Limpiar sesión
+      SesionActual.usuarioId = null;
+      SesionActual.nombre = null;
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -40,6 +44,9 @@ class PerfilScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final nombre = SesionActual.nombre ?? 'Usuario';
+    final username = nombre; // puedes separar nombre/username si quieres
+
     return CustomScrollView(
       slivers: [
         // Encabezado del perfil
@@ -53,17 +60,12 @@ class PerfilScreen extends StatelessWidget {
                 CircleAvatar(
                   radius: 50,
                   backgroundColor: MiTema.crema,
-                  child: Icon(
-                    Icons.person,
-                    size: 60,
-                    color: MiTema.vino,
-                  ),
+                  child: Icon(Icons.person, size: 60, color: MiTema.vino),
                 ),
                 const SizedBox(height: 16),
-
-                // Nombre y email
+                // Nombre
                 Text(
-                  'Juan Pérez',
+                  nombre,
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -72,7 +74,7 @@ class PerfilScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'juan.perez@email.com',
+                  username,
                   style: TextStyle(
                     fontSize: 14,
                     color: MiTema.crema.withOpacity(0.9),
@@ -85,7 +87,7 @@ class PerfilScreen extends StatelessWidget {
 
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-        // Estadísticas
+        // Estadísticas (por ahora valores fijos de ejemplo)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -95,25 +97,25 @@ class PerfilScreen extends StatelessWidget {
                   child: _StatCard(
                     icon: Icons.favorite_outline,
                     title: 'Favoritos',
-                    value: '12',
+                    value: '0',
                     color: Colors.red,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
                     icon: Icons.home_outlined,
                     title: 'Publicados',
-                    value: '5',
+                    value: '0',
                     color: MiTema.vino,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
                     icon: Icons.mail_outline,
                     title: 'Mensajes',
-                    value: '8',
+                    value: '0',
                     color: MiTema.celeste,
                   ),
                 ),
@@ -142,21 +144,42 @@ class PerfilScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    // Publicar
                     Expanded(
                       child: _QuickActionButton(
                         icon: Icons.add_home_work_outlined,
                         label: 'Publicar',
                         bgColor: MiTema.vino,
-                        onTap: () {},
+                        onTap: () {
+                          final propietarioId = SesionActual.usuarioId ?? 1;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RegistrarInmuebleScreen(
+                                propietarioId: propietarioId,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 10),
+                    // Ver todas
                     Expanded(
                       child: _QuickActionButton(
                         icon: Icons.list_outlined,
                         label: 'Ver todas',
                         bgColor: MiTema.celeste,
-                        onTap: () {},
+                        onTap: () {
+                          final usuarioId = SesionActual.usuarioId ?? 1;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ArrendadorScreen(usuarioId: usuarioId),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -176,7 +199,13 @@ class PerfilScreen extends StatelessWidget {
               _SettingsTile(
                 icon: Icons.person_outline,
                 title: 'Editar perfil',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pantalla de editar perfil (pendiente)'),
+                    ),
+                  );
+                },
                 showDivider: false,
               ),
             ],
@@ -195,7 +224,15 @@ class PerfilScreen extends StatelessWidget {
                 title: 'Notificaciones',
                 trailing: Switch(
                   value: true,
-                  onChanged: (_) {},
+                  onChanged: (_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Configuración de notificaciones pendiente',
+                        ),
+                      ),
+                    );
+                  },
                   activeColor: MiTema.celeste,
                 ),
               ),
@@ -204,7 +241,13 @@ class PerfilScreen extends StatelessWidget {
                 title: 'Tema oscuro',
                 trailing: Switch(
                   value: false,
-                  onChanged: (_) {},
+                  onChanged: (_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Tema oscuro aún no implementado'),
+                      ),
+                    );
+                  },
                   activeColor: MiTema.celeste,
                 ),
                 showDivider: false,
@@ -223,12 +266,28 @@ class PerfilScreen extends StatelessWidget {
               _SettingsTile(
                 icon: Icons.help_outline,
                 title: 'Centro de ayuda',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Centro de ayuda próximamente'),
+                    ),
+                  );
+                },
               ),
               _SettingsTile(
                 icon: Icons.info_outline,
                 title: 'Acerca de ArrendaOco',
-                onTap: () {},
+                onTap: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'ArrendaOco',
+                    applicationVersion: '1.0.0',
+                    applicationIcon: Icon(Icons.home, color: MiTema.vino),
+                    children: const [
+                      Text('Aplicación para renta de inmuebles.'),
+                    ],
+                  );
+                },
                 showDivider: false,
               ),
             ],
@@ -255,10 +314,7 @@ class PerfilScreen extends StatelessWidget {
                 ),
                 child: const Text(
                   'Cerrar sesión',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -271,7 +327,8 @@ class PerfilScreen extends StatelessWidget {
   }
 }
 
-// Widget para tarjeta de estadística
+// ================= Widgets auxiliares =================
+
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -307,20 +364,13 @@ class _StatCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[700],
-            ),
-          ),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
         ],
       ),
     );
   }
 }
 
-// Widget para botón de acción rápida
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -364,15 +414,11 @@ class _QuickActionButton extends StatelessWidget {
   }
 }
 
-// Widget para tarjeta de sección
 class _SectionCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const _SectionCard({
-    required this.title,
-    required this.children,
-  });
+  const _SectionCard({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -382,11 +428,11 @@ class _SectionCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Color.fromRGBO(158, 158, 158, 0.1), // gris con 10% opacidad
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
@@ -419,7 +465,6 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-// Widget para elemento de configuración
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -443,12 +488,10 @@ class _SettingsTile extends StatelessWidget {
           leading: Icon(icon, color: MiTema.vino),
           title: Text(
             title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          trailing: trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),
+          trailing:
+              trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),
           onTap: onTap,
           visualDensity: const VisualDensity(vertical: -1),
         ),
