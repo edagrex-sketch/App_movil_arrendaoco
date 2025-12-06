@@ -8,8 +8,13 @@ import 'package:arrendaoco/model/sesion_actual.dart';
 
 class DetalleInmuebleScreen extends StatefulWidget {
   final Map inmueble;
+  final int? usuarioId;
 
-  const DetalleInmuebleScreen({super.key, required this.inmueble});
+  const DetalleInmuebleScreen({
+    super.key,
+    required this.inmueble,
+    this.usuarioId,
+  });
 
   @override
   State<DetalleInmuebleScreen> createState() => _DetalleInmuebleScreenState();
@@ -21,18 +26,34 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
   List<Map<String, dynamic>> _resenas = [];
   double _promedioRating = 0.0;
   int _totalResenas = 0;
+  bool _esFavorito = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _cargarResenas();
+    _verificarFavorito();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _verificarFavorito() async {
+    if (widget.usuarioId != null) {
+      final esFav = await BaseDatos.esFavorito(
+        widget.usuarioId!,
+        widget.inmueble['id'] as int,
+      );
+      if (mounted) {
+        setState(() {
+          _esFavorito = esFav;
+        });
+      }
+    }
   }
 
   Future<void> _cargarResenas() async {
@@ -73,22 +94,47 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     const metros = 80;
 
     return Scaffold(
-      backgroundColor: MiTema.crema,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: MiTema.azul,
         foregroundColor: MiTema.crema,
         title: Text(titulo, style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.favorite_border),
-            color: MiTema.crema,
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Agregado a favoritos')),
-              );
-            },
-          ),
+          if (widget.usuarioId != null)
+            IconButton(
+              icon: Icon(_esFavorito ? Icons.favorite : Icons.favorite_border),
+              color: MiTema.crema,
+              onPressed: () async {
+                if (_esFavorito) {
+                  await BaseDatos.eliminarFavorito(
+                    widget.usuarioId!,
+                    inmueble['id'] as int,
+                  );
+                  if (mounted) {
+                    setState(() {
+                      _esFavorito = false;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Eliminado de favoritos')),
+                    );
+                  }
+                } else {
+                  await BaseDatos.agregarFavorito(
+                    widget.usuarioId!,
+                    inmueble['id'] as int,
+                  );
+                  if (mounted) {
+                    setState(() {
+                      _esFavorito = true;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Agregado a favoritos')),
+                    );
+                  }
+                }
+              },
+            ),
         ],
       ),
       body: SingleChildScrollView(

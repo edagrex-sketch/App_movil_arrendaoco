@@ -1,9 +1,16 @@
 // main.dart
 import 'package:flutter/material.dart';
-import 'package:arrendaoco/theme/tema.dart'; 
-import 'package:arrendaoco/view/login.dart';  
-void main() {
-  runApp(const MyApp());  
+import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/view/login.dart';
+import 'package:arrendaoco/services/notificaciones_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar servicio de notificaciones
+  await NotificacionesService.inicializar();
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -14,9 +21,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ArrendaOco',
-      theme: MiTema.temaApp(context),  
+      theme: MiTema.temaApp(context),
       themeMode: ThemeMode.system,
-      home: const LoginScreen(),  
+      home: const LoginScreen(),
     );
   }
 }

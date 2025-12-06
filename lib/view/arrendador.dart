@@ -29,7 +29,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: MiTema.crema,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('ArrendaOco'),
         backgroundColor: MiTema.azul,

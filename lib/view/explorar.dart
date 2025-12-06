@@ -6,7 +6,9 @@ import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
 
 class ExplorarScreen extends StatefulWidget {
-  const ExplorarScreen({super.key});
+  final int? usuarioId;
+
+  const ExplorarScreen({super.key, this.usuarioId});
 
   @override
   State<ExplorarScreen> createState() => _ExplorarScreenState();
@@ -182,18 +184,85 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (primeraRuta != null)
-                                ClipRRect(
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(16),
-                                  ),
-                                  child: Image.file(
-                                    File(primeraRuta),
-                                    height: 180,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
+                              Stack(
+                                children: [
+                                  if (primeraRuta != null)
+                                    ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(16),
+                                      ),
+                                      child: Image.file(
+                                        File(primeraRuta),
+                                        height: 180,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  if (widget.usuarioId != null)
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: FutureBuilder<bool>(
+                                        future: BaseDatos.esFavorito(
+                                          widget.usuarioId!,
+                                          i['id'] as int,
+                                        ),
+                                        builder: (context, snapshot) {
+                                          final esFav = snapshot.data ?? false;
+                                          return CircleAvatar(
+                                            backgroundColor: Colors.white,
+                                            child: IconButton(
+                                              icon: Icon(
+                                                esFav
+                                                    ? Icons.favorite
+                                                    : Icons.favorite_border,
+                                                color: esFav
+                                                    ? MiTema.rojo
+                                                    : Colors.grey,
+                                              ),
+                                              onPressed: () async {
+                                                if (esFav) {
+                                                  await BaseDatos.eliminarFavorito(
+                                                    widget.usuarioId!,
+                                                    i['id'] as int,
+                                                  );
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Eliminado de favoritos',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                } else {
+                                                  await BaseDatos.agregarFavorito(
+                                                    widget.usuarioId!,
+                                                    i['id'] as int,
+                                                  );
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Agregado a favoritos',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                                setState(() {});
+                                              },
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
+                              ),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -260,6 +329,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                               builder: (context) =>
                                                   DetalleInmuebleScreen(
                                                     inmueble: i,
+                                                    usuarioId: widget.usuarioId,
                                                   ),
                                             ),
                                           );

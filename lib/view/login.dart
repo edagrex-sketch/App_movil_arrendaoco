@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
 import 'package:arrendaoco/view/arrendador.dart';
+import 'package:arrendaoco/view/inquilino_home.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
@@ -69,24 +70,38 @@ class LoginScreenState extends State<LoginScreen> {
 
         // GUARDAR SESIÓN
         SesionActual.usuarioId = usuarioId;
-        SesionActual.nombre =
-            (usuario['nombre'] ?? usuario['username'] ?? '').toString();
+        SesionActual.nombre = (usuario['nombre'] ?? usuario['username'] ?? '')
+            .toString();
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ArrendadorScreen(usuarioId: usuarioId),
-          ),
-        );
+        // Obtener el rol del usuario
+        final rol = (usuario['rol'] ?? 'Inquilino').toString();
+
+        // Navegar según el rol
+        if (rol == 'Arrendador') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ArrendadorScreen(usuarioId: usuarioId),
+            ),
+          );
+        } else {
+          // Inquilino o cualquier otro rol
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => InquilinoHomeScreen(usuarioId: usuarioId),
+            ),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Usuario o contraseña incorrectos')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al iniciar sesión: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al iniciar sesión: $e')));
     }
   }
 
@@ -102,10 +117,7 @@ class LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: MiTema.azul,
-        title: Text(
-          'Iniciar sesión',
-          style: TextStyle(color: MiTema.crema),
-        ),
+        title: Text('Iniciar sesión', style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
       ),
       body: Padding(
@@ -117,10 +129,7 @@ class LoginScreenState extends State<LoginScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 100,
-                ),
+                child: Image.asset('assets/images/logo.png', height: 100),
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -162,8 +171,10 @@ class LoginScreenState extends State<LoginScreen> {
                 onPressed: login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: MiTema.celeste,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 50,
+                    vertical: 15,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

@@ -162,7 +162,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MiTema.crema,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: MiTema.azul,
         title: Text('Nuevo inmueble', style: TextStyle(color: MiTema.crema)),

@@ -4,7 +4,12 @@ import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/view/login.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
+import 'package:arrendaoco/view/calendario_inquilino.dart';
+import 'package:arrendaoco/view/calendario_arrendador.dart';
+import 'package:arrendaoco/view/gestionar_rentas.dart';
+import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/model/bd.dart';
 
 class PerfilScreen extends StatelessWidget {
   const PerfilScreen({super.key});
@@ -49,7 +54,7 @@ class PerfilScreen extends StatelessWidget {
     final username = nombre; // puedes separar nombre/username si quieres
 
     return Container(
-      color: MiTema.crema,
+      color: Colors.white,
       child: CustomScrollView(
         slivers: [
           // Encabezado del perfil
@@ -85,6 +90,33 @@ class PerfilScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: MiTema.crema.withOpacity(0.9),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.badge, size: 16, color: MiTema.crema),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ID: ${SesionActual.usuarioId ?? "N/A"}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: MiTema.crema,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -210,6 +242,88 @@ class PerfilScreen extends StatelessWidget {
                         content: Text('Pantalla de editar perfil (pendiente)'),
                       ),
                     );
+                  },
+                ),
+                _SettingsTile(
+                  icon: Icons.home_work,
+                  title: 'Mis Rentas',
+                  onTap: () async {
+                    final usuarioId = SesionActual.usuarioId;
+                    if (usuarioId == null) return;
+
+                    final db = await BaseDatos.conecta();
+                    final usuario = await db.query(
+                      'usuarios',
+                      where: 'id = ?',
+                      whereArgs: [usuarioId],
+                      limit: 1,
+                    );
+
+                    if (usuario.isNotEmpty) {
+                      final rol = (usuario.first['rol'] ?? 'Inquilino')
+                          .toString();
+
+                      if (context.mounted) {
+                        if (rol == 'Arrendador') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const GestionarRentasScreen(),
+                            ),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MisRentasScreen(),
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+                _SettingsTile(
+                  icon: Icons.calendar_today,
+                  title: 'Calendario',
+                  onTap: () async {
+                    // Obtener el rol del usuario
+                    final usuarioId = SesionActual.usuarioId;
+                    if (usuarioId == null) return;
+
+                    final db = await BaseDatos.conecta();
+                    final usuario = await db.query(
+                      'usuarios',
+                      where: 'id = ?',
+                      whereArgs: [usuarioId],
+                      limit: 1,
+                    );
+
+                    if (usuario.isNotEmpty) {
+                      final rol = (usuario.first['rol'] ?? 'Inquilino')
+                          .toString();
+
+                      if (context.mounted) {
+                        if (rol == 'Arrendador') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const CalendarioArrendadorScreen(),
+                            ),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const CalendarioInquilinoScreen(),
+                            ),
+                          );
+                        }
+                      }
+                    }
                   },
                   showDivider: false,
                 ),
