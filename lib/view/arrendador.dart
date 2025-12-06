@@ -44,10 +44,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                 const SnackBar(content: Text('Notificaciones próximamente')),
               );
             },
-            icon: Icon(
-              Icons.notifications_outlined,
-              color: MiTema.crema,
-            ),
+            icon: Icon(Icons.notifications_outlined, color: MiTema.crema),
           ),
         ],
       ),
@@ -68,24 +65,16 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
               },
               backgroundColor: MiTema.celeste,
               icon: Icon(Icons.add_home_work_outlined, color: MiTema.blanco),
-              label: Text(
-                'Publicar',
-                style: TextStyle(color: MiTema.blanco),
-              ),
+              label: Text('Publicar', style: TextStyle(color: MiTema.blanco)),
             )
           : null,
       bottomNavigationBar: NavigationBarTheme(
         data: const NavigationBarThemeData(
           backgroundColor: Colors.transparent,
           indicatorColor: Colors.transparent,
-          iconTheme: MaterialStatePropertyAll(
-            IconThemeData(color: Colors.white),
-          ),
-          labelTextStyle: MaterialStatePropertyAll(
-            TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
+          iconTheme: WidgetStatePropertyAll(IconThemeData(color: Colors.white)),
+          labelTextStyle: WidgetStatePropertyAll(
+            TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
         ),
         child: Container(
@@ -170,9 +159,7 @@ class InicioFeedState extends State<InicioFeed> {
         final inmuebles = snapshot.data ?? [];
 
         if (inmuebles.isEmpty) {
-          return const Center(
-            child: Text('Aún no has publicado inmuebles.'),
-          );
+          return const Center(child: Text('Aún no has publicado inmuebles.'));
         }
 
         return ListView.builder(
@@ -185,8 +172,9 @@ class InicioFeedState extends State<InicioFeed> {
             final precio = i['precio'] ?? 0;
             final categoria = i['categoria'] ?? '';
             final rutas = i['rutas_imagen'] as String? ?? '';
-            final primeraRuta =
-                rutas.isNotEmpty ? rutas.split('|').first : null;
+            final primeraRuta = rutas.isNotEmpty
+                ? rutas.split('|').first
+                : null;
 
             return Card(
               elevation: 4,
@@ -230,19 +218,14 @@ class InicioFeedState extends State<InicioFeed> {
                         const SizedBox(height: 4),
                         Text(
                           categoria.toString(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: MiTema.celeste,
-                          ),
+                          style: TextStyle(fontSize: 14, color: MiTema.celeste),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           descripcion.toString(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: MiTema.negro,
-                          ),
+                          style: TextStyle(color: MiTema.negro),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -262,8 +245,7 @@ class InicioFeedState extends State<InicioFeed> {
                                 await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) =>
-                                        RegistrarInmuebleScreen(
+                                    builder: (context) => RegistrarInmuebleScreen(
                                       propietarioId: widget.usuarioId,
                                       // Más adelante puedes pasar el inmueble para edición real
                                     ),
@@ -303,8 +285,7 @@ class InicioFeedState extends State<InicioFeed> {
                                             Navigator.pop(context, false),
                                         child: Text(
                                           'Cancelar',
-                                          style:
-                                              TextStyle(color: MiTema.azul),
+                                          style: TextStyle(color: MiTema.azul),
                                         ),
                                       ),
                                       TextButton(

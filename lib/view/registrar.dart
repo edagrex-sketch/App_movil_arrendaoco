@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/view/login.dart';
 import 'package:sqflite/sqflite.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -26,7 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedRol = widget.rolInicial; 
+    _selectedRol = widget.rolInicial;
   }
 
   Future<void> _register() async {
@@ -49,7 +50,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Usuario registrado correctamente')),
       );
-      Navigator.pop(context);
+      // Navegar al login después de registrarse
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     } catch (e) {
       if (e is DatabaseException && e.isUniqueConstraintError()) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -79,10 +84,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: MiTema.azul,
-        title: Text(
-          'Registro',
-          style: TextStyle(color: MiTema.crema),
-        ),
+        title: Text('Registro', style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
         iconTheme: IconThemeData(color: MiTema.crema),
       ),
@@ -94,10 +96,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 90,
-                ),
+                child: Image.asset('assets/images/logo.png', height: 90),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -210,7 +209,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MiTema.celeste,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 50, vertical: 15),
+                      horizontal: 50,
+                      vertical: 15,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -224,7 +225,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  // Navegar al login
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
+                  );
                 },
                 child: Text(
                   '¿Ya tienes cuenta? Inicia sesión',
@@ -233,7 +240,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                     decoration: TextDecoration.underline,
-                  
                   ),
                 ),
               ),

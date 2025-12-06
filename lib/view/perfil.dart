@@ -14,24 +14,16 @@ class PerfilScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: MiTema.blanco,
-        title: Text(
-          'Cerrar sesión',
-          style: TextStyle(color: MiTema.azul),
-        ),
+        title: Text('Cerrar sesión', style: TextStyle(color: MiTema.azul)),
         content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: MiTema.azul),
-            ),
+            child: Text('Cancelar', style: TextStyle(color: MiTema.azul)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: MiTema.rojo,
-            ),
+            style: TextButton.styleFrom(foregroundColor: MiTema.rojo),
             child: const Text('Cerrar sesión'),
           ),
         ],
@@ -168,8 +160,7 @@ class PerfilScreen extends StatelessWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    RegistrarInmuebleScreen(
+                                builder: (context) => RegistrarInmuebleScreen(
                                   propietarioId: propietarioId,
                                 ),
                               ),
@@ -216,8 +207,7 @@ class PerfilScreen extends StatelessWidget {
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content:
-                            Text('Pantalla de editar perfil (pendiente)'),
+                        content: Text('Pantalla de editar perfil (pendiente)'),
                       ),
                     );
                   },
@@ -248,7 +238,7 @@ class PerfilScreen extends StatelessWidget {
                         ),
                       );
                     },
-                    activeColor: MiTema.celeste,
+                    activeThumbColor: MiTema.celeste,
                   ),
                 ),
                 _SettingsTile(
@@ -259,12 +249,11 @@ class PerfilScreen extends StatelessWidget {
                     onChanged: (_) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content:
-                              Text('Tema oscuro aún no implementado'),
+                          content: Text('Tema oscuro aún no implementado'),
                         ),
                       );
                     },
-                    activeColor: MiTema.celeste,
+                    activeThumbColor: MiTema.celeste,
                   ),
                   showDivider: false,
                 ),
@@ -298,8 +287,7 @@ class PerfilScreen extends StatelessWidget {
                       context: context,
                       applicationName: 'ArrendaOco',
                       applicationVersion: '1.0.0',
-                      applicationIcon:
-                          Icon(Icons.home, color: MiTema.azul),
+                      applicationIcon: Icon(Icons.home, color: MiTema.azul),
                       children: const [
                         Text('Aplicación para renta de inmuebles.'),
                       ],
@@ -315,8 +303,7 @@ class PerfilScreen extends StatelessWidget {
           // Botón Cerrar sesión
           SliverToBoxAdapter(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -324,18 +311,14 @@ class PerfilScreen extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MiTema.rojo,
                     foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   child: const Text(
                     'Cerrar sesión',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -392,10 +375,7 @@ class _StatCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-          ),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
         ],
       ),
     );
@@ -525,10 +505,7 @@ class _SettingsTile extends StatelessWidget {
           leading: Icon(icon, color: MiTema.azul),
           title: Text(
             title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           trailing:
               trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),

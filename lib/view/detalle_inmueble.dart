@@ -9,10 +9,7 @@ import 'package:arrendaoco/model/sesion_actual.dart';
 class DetalleInmuebleScreen extends StatefulWidget {
   final Map inmueble;
 
-  const DetalleInmuebleScreen({
-    super.key,
-    required this.inmueble,
-  });
+  const DetalleInmuebleScreen({super.key, required this.inmueble});
 
   @override
   State<DetalleInmuebleScreen> createState() => _DetalleInmuebleScreenState();
@@ -51,9 +48,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar reseñas: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al cargar reseñas: $e')));
     }
   }
 
@@ -80,10 +77,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
       appBar: AppBar(
         backgroundColor: MiTema.azul,
         foregroundColor: MiTema.crema,
-        title: Text(
-          titulo,
-          style: TextStyle(color: MiTema.crema),
-        ),
+        title: Text(titulo, style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -320,14 +314,13 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     height: 250,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: MiTema.celeste.withOpacity(0.4)),
+                      border: Border.all(
+                        color: MiTema.celeste.withOpacity(0.4),
+                      ),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(11),
-                      child: MapPreviewOsm(
-                        lat: latitud,
-                        lng: longitud,
-                      ),
+                      child: MapPreviewOsm(lat: latitud, lng: longitud),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -338,10 +331,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                       Text(
                         'Lat: ${latitud.toStringAsFixed(4)}, '
                         'Lng: ${longitud.toStringAsFixed(4)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -370,10 +360,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 children: const [
                   Text(
                     'Reseñas de inquilinos',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 4),
                   Text(
@@ -388,8 +375,10 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
               onPressed: _mostrarFormularioResena,
               style: ElevatedButton.styleFrom(
                 backgroundColor: MiTema.celeste,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -425,7 +414,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
             style: TextStyle(color: Colors.grey),
           ),
         const SizedBox(height: 12),
-        ..._resenas.map((r) => _buildItemResena(r)).toList(),
+        ..._resenas.map((r) => _buildItemResena(r)),
       ],
     );
   }
@@ -468,10 +457,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 ),
                 Text(
                   fecha,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ],
             ),
@@ -491,10 +477,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
             ),
             if (comentario.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(
-                comentario,
-                style: const TextStyle(fontSize: 13),
-              ),
+              Text(comentario, style: const TextStyle(fontSize: 13)),
             ],
           ],
         ),
@@ -526,10 +509,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
             children: [
               const Text(
                 'Comparte tu experiencia',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               const Text(
@@ -576,13 +556,14 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                   onPressed: () async {
                     if (ratingSeleccionado < 1) return;
                     try {
-                      final inmuebleId =
-                          int.parse(widget.inmueble['id'].toString());
+                      final inmuebleId = int.parse(
+                        widget.inmueble['id'].toString(),
+                      );
                       final nombreSesion = SesionActual.nombre;
                       final nombre =
                           (nombreSesion == null || nombreSesion.trim().isEmpty)
-                              ? 'Anónimo'
-                              : nombreSesion.trim();
+                          ? 'Anónimo'
+                          : nombreSesion.trim();
                       final comentario = comentarioController.text.trim();
                       final fecha = DateTime.now()
                           .toIso8601String()
@@ -605,10 +586,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text('Error al guardar reseña: $e'),
-                        ),
+                        SnackBar(content: Text('Error al guardar reseña: $e')),
                       );
                     }
                   },

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'registrar.dart';
 
 class SeleccionarRolScreen extends StatefulWidget {
+  const SeleccionarRolScreen({super.key});
+
   @override
   _SeleccionarRolScreenState createState() => _SeleccionarRolScreenState();
 }
@@ -14,12 +16,12 @@ class _SeleccionarRolScreenState extends State<SeleccionarRolScreen> {
     {
       "nombre": "Quiero publicitar mi propiedad",
       "rol": "Arrendador",
-      "icono": Icons.home_work
+      "icono": Icons.home_work,
     },
     {
       "nombre": "Buscar lugares para rentar",
       "rol": "Inquilino",
-      "icono": Icons.people_alt
+      "icono": Icons.people_alt,
     },
   ];
 
@@ -70,22 +72,24 @@ class _SeleccionarRolScreenState extends State<SeleccionarRolScreen> {
                           boxShadow: seleccionado
                               ? [
                                   BoxShadow(
-                                      color: MiTema.vino.withOpacity(0.22),
-                                      blurRadius: 9,
-                                      spreadRadius: 3)
+                                    color: MiTema.vino.withOpacity(0.22),
+                                    blurRadius: 9,
+                                    spreadRadius: 3,
+                                  ),
                                 ]
                               : [],
                         ),
                         child: Center(
                           child: Icon(
                             rol['icono'] as IconData,
-                            size: 70, // ¡El ícono abarca la mayor parte del círculo!
+                            size:
+                                70, // ¡El ícono abarca la mayor parte del círculo!
                             color: MiTema.vino,
                           ),
                         ),
                       ),
                       SizedBox(height: 10),
-                      Container(
+                      SizedBox(
                         width: 120,
                         child: Text(
                           rol['nombre'] as String,
@@ -119,15 +123,14 @@ class _SeleccionarRolScreenState extends State<SeleccionarRolScreen> {
                             ),
                           );
                         },
-                  child: Text('Continuar'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MiTema.azul,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 50, vertical: 13),
+                    padding: EdgeInsets.symmetric(horizontal: 50, vertical: 13),
                   ),
+                  child: Text('Continuar'),
                 ),
               ),
             ),

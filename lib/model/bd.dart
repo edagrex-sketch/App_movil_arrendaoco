@@ -12,7 +12,7 @@ class BaseDatos {
 
     _db = await openDatabase(
       path,
-      version: 2, // IMPORTANTE: versión 2 para crear resenas si ya existía la BD
+      version: 3, // IMPORTANTE: versión 3 para agregar columna 'rol' a usuarios
       onCreate: (Database db, int version) async {
         // ======== Tabla usuarios ========
         await db.execute('''
@@ -20,7 +20,8 @@ class BaseDatos {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
             nombre TEXT,
-            password TEXT
+            password TEXT,
+            rol TEXT
           )
         ''');
 
@@ -28,6 +29,7 @@ class BaseDatos {
           'username': 'admin',
           'nombre': 'Administrador',
           'password': '123',
+          'rol': 'Arrendador',
         });
 
         // ======== Tabla inmuebles ========
@@ -85,6 +87,12 @@ class BaseDatos {
             )
           ''');
         }
+        if (oldVersion < 3) {
+          // Agregar columna 'rol' a la tabla usuarios
+          await db.execute('''
+            ALTER TABLE usuarios ADD COLUMN rol TEXT
+          ''');
+        }
       },
     );
 
@@ -111,7 +119,8 @@ class BaseDatos {
   }
 
   static Future<List<Map<String, dynamic>>> obtenerResenasPorInmueble(
-      int inmuebleId) async {
+    int inmuebleId,
+  ) async {
     final db = await conecta();
     return db.query(
       'resenas',
@@ -122,15 +131,19 @@ class BaseDatos {
   }
 
   static Future<Map<String, dynamic>> obtenerResumenResenas(
-      int inmuebleId) async {
+    int inmuebleId,
+  ) async {
     final db = await conecta();
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT 
         AVG(rating) AS promedio,
         COUNT(*) AS total
       FROM resenas
       WHERE inmueble_id = ?
-    ''', [inmuebleId]);
+    ''',
+      [inmuebleId],
+    );
 
     if (result.isNotEmpty) {
       final row = result.first;
@@ -140,19 +153,16 @@ class BaseDatos {
       final promedio = promedioRaw == null
           ? 0.0
           : (promedioRaw is int)
-              ? promedioRaw.toDouble()
-              : promedioRaw as double;
+          ? promedioRaw.toDouble()
+          : promedioRaw as double;
 
       final total = totalRaw == null
           ? 0
           : (totalRaw is int)
-              ? totalRaw
-              : (totalRaw as num).toInt();
+          ? totalRaw
+          : (totalRaw as num).toInt();
 
-      return {
-        'promedio': promedio,
-        'total': total,
-      };
+      return {'promedio': promedio, 'total': total};
     }
     return {'promedio': 0.0, 'total': 0};
   }

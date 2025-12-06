@@ -27,20 +27,19 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
 
   Future<List<Map<String, dynamic>>> _cargarInmuebles() async {
     final db = await BaseDatos.conecta();
-    return db.query(
-      'inmuebles',
-      orderBy: 'id DESC',
-    );
+    return db.query('inmuebles', orderBy: 'id DESC');
   }
 
   List<Map<String, dynamic>> _aplicarFiltros(
-      List<Map<String, dynamic>> inmuebles) {
+    List<Map<String, dynamic>> inmuebles,
+  ) {
     return inmuebles.where((i) {
       final titulo = (i['titulo'] ?? '').toString().toLowerCase();
       final desc = (i['descripcion'] ?? '').toString().toLowerCase();
       final cat = (i['categoria'] ?? '').toString();
 
-      final coincideTexto = _busqueda.isEmpty ||
+      final coincideTexto =
+          _busqueda.isEmpty ||
           titulo.contains(_busqueda.toLowerCase()) ||
           desc.contains(_busqueda.toLowerCase());
 
@@ -72,8 +71,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
           children: [
             // Barra de búsqueda
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Buscar departamento, casa, etc.',
@@ -85,8 +83,10 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 0,
+                  ),
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -111,15 +111,14 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                         selected: seleccionado,
                         selectedColor: MiTema.celeste.withOpacity(0.2),
                         labelStyle: TextStyle(
-                          color:
-                              seleccionado ? MiTema.vino : Colors.grey[800],
-                          fontWeight:
-                              seleccionado ? FontWeight.bold : FontWeight.w500,
+                          color: seleccionado ? MiTema.vino : Colors.grey[800],
+                          fontWeight: seleccionado
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                         ),
                         onSelected: (value) {
                           setState(() {
-                            _categoriaSeleccionada =
-                                value ? cat : null;
+                            _categoriaSeleccionada = value ? cat : null;
                           });
                         },
                       ),
@@ -146,12 +145,12 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
             // Lista de cards
             Expanded(
               child: inmuebles.isEmpty
-                  ? const Center(
-                      child: Text('No se encontraron inmuebles.'),
-                    )
+                  ? const Center(child: Text('No se encontraron inmuebles.'))
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       itemCount: inmuebles.length,
                       itemBuilder: (context, index) {
                         final i = inmuebles[index];
@@ -160,16 +159,19 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                         final precio = i['precio'] ?? 0;
                         final categoria = i['categoria'] ?? '';
                         final rutas = (i['rutas_imagen'] as String?) ?? '';
-                        final primeraRuta =
-                            rutas.isNotEmpty ? rutas.split('|').first : null;
+                        final primeraRuta = rutas.isNotEmpty
+                            ? rutas.split('|').first
+                            : null;
 
                         // Datos de ejemplo para cuartos/baños/área
                         const recamaras = 2;
                         const banos = 1;
                         const metros = 80;
 
-                        final direccionCorta =
-                            descripcion.toString().split('\n').first;
+                        final direccionCorta = descripcion
+                            .toString()
+                            .split('\n')
+                            .first;
 
                         return Card(
                           elevation: 4,
@@ -182,9 +184,9 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                             children: [
                               if (primeraRuta != null)
                                 ClipRRect(
-                                  borderRadius:
-                                      const BorderRadius.vertical(
-                                          top: Radius.circular(16)),
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(16),
+                                  ),
                                   child: Image.file(
                                     File(primeraRuta),
                                     height: 180,
@@ -198,8 +200,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                   vertical: 12,
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       '\$${precio.toString()}/mes',
@@ -212,27 +213,32 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [
-                                        const Icon(Icons.bed_outlined,
-                                            size: 16),
+                                        const Icon(
+                                          Icons.bed_outlined,
+                                          size: 16,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text('$recamaras camas'),
                                         const SizedBox(width: 12),
-                                        const Icon(Icons.bathtub_outlined,
-                                            size: 16),
+                                        const Icon(
+                                          Icons.bathtub_outlined,
+                                          size: 16,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text('$banos baño'),
                                         const SizedBox(width: 12),
-                                        const Icon(Icons.square_foot,
-                                            size: 16),
+                                        const Icon(Icons.square_foot, size: 16),
                                         const SizedBox(width: 4),
-                                        Text('${metros} m²'),
+                                        Text('$metros m²'),
                                       ],
                                     ),
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [
-                                        const Icon(Icons.location_on_outlined,
-                                            size: 16),
+                                        const Icon(
+                                          Icons.location_on_outlined,
+                                          size: 16,
+                                        ),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
@@ -253,8 +259,8 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                             MaterialPageRoute(
                                               builder: (context) =>
                                                   DetalleInmuebleScreen(
-                                                inmueble: i,
-                                              ),
+                                                    inmueble: i,
+                                                  ),
                                             ),
                                           );
                                         },
@@ -262,8 +268,9 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                           backgroundColor: MiTema.celeste,
                                           foregroundColor: Colors.white,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                         ),
                                         child: const Text('Ver detalles'),

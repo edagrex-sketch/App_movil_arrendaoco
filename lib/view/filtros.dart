@@ -90,10 +90,9 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Rango de precio
             Text(
               'Rango de precio',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             Container(
@@ -132,10 +131,9 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Camas
             Text(
               'Cama',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
@@ -146,7 +144,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: Text('${valor}${valor > 3 ? '+' : ''}'),
+                      label: Text('$valor${valor > 3 ? '+' : ''}'),
                       selected: _camasSeleccionadas == valor,
                       selectedColor: MiTema.vino,
                       labelStyle: TextStyle(
@@ -157,8 +155,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
                       ),
                       onSelected: (selected) {
                         setState(() {
-                          _camasSeleccionadas =
-                              selected ? valor : null;
+                          _camasSeleccionadas = selected ? valor : null;
                         });
                       },
                     ),
@@ -171,10 +168,9 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Tipo de inmueble
             Text(
               'Tipo de inmueble',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             DropdownButton<String>(
@@ -182,10 +178,12 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
               isExpanded: true,
               hint: const Text('Todos'),
               items: _tipos
-                  .map((tipo) => DropdownMenuItem(
-                        value: tipo == 'Todos' ? null : tipo,
-                        child: Text(tipo),
-                      ))
+                  .map(
+                    (tipo) => DropdownMenuItem(
+                      value: tipo == 'Todos' ? null : tipo,
+                      child: Text(tipo),
+                    ),
+                  )
                   .toList(),
               onChanged: (valor) {
                 setState(() {
@@ -198,10 +196,9 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Baños
             Text(
               'Baño',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             SingleChildScrollView(
@@ -228,7 +225,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
-                        label: Text('${valor}${valor > 2 ? '+' : ''}'),
+                        label: Text('$valor${valor > 2 ? '+' : ''}'),
                         selected: _banosSeleccionados == valor,
                         selectedColor: MiTema.vino,
                         labelStyle: TextStyle(
@@ -239,8 +236,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
                         ),
                         onSelected: (selected) {
                           setState(() {
-                            _banosSeleccionados =
-                                selected ? valor : null;
+                            _banosSeleccionados = selected ? valor : null;
                           });
                         },
                       ),
@@ -254,10 +250,9 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Tamaño del inmueble
             Text(
               'Tamaño del inmueble',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             DropdownButton<String>(
@@ -265,10 +260,12 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
               isExpanded: true,
               hint: const Text('Todos'),
               items: _tamanos
-                  .map((tamano) => DropdownMenuItem(
-                        value: tamano == 'Todos' ? null : tamano,
-                        child: Text(tamano),
-                      ))
+                  .map(
+                    (tamano) => DropdownMenuItem(
+                      value: tamano == 'Todos' ? null : tamano,
+                      child: Text(tamano),
+                    ),
+                  )
                   .toList(),
               onChanged: (valor) {
                 setState(() {
@@ -281,16 +278,15 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             // Toggles
             Text(
               'Servicios',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             SwitchListTile(
               title: const Text('Estacionamiento'),
               value: _estacionamiento,
-              activeColor: MiTema.celeste,
+              activeThumbColor: MiTema.celeste,
               onChanged: (value) {
                 setState(() {
                   _estacionamiento = value;
@@ -301,7 +297,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             SwitchListTile(
               title: const Text('Amueblado'),
               value: _amueblado,
-              activeColor: MiTema.celeste,
+              activeThumbColor: MiTema.celeste,
               onChanged: (value) {
                 setState(() {
                   _amueblado = value;
@@ -312,7 +308,7 @@ class _FiltrosScreenState extends State<FiltrosScreen> {
             SwitchListTile(
               title: const Text('Mascotas'),
               value: _mascotas,
-              activeColor: MiTema.celeste,
+              activeThumbColor: MiTema.celeste,
               onChanged: (value) {
                 setState(() {
                   _mascotas = value;
