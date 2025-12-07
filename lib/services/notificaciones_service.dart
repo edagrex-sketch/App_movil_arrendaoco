@@ -67,13 +67,14 @@ class NotificacionesService {
 
   /// Notificar nueva renta creada
   static Future<void> notificarNuevaRenta({
-    required int inquilinoId,
+    required String inquilinoId,
     required String inmuebleTitulo,
     required double monto,
   }) async {
-    // Guardar en BD
+    // Guardar en SQLite
+    // Asumimos que inquilinoId es parseable a int
     await BaseDatos.crearNotificacion(
-      usuarioId: inquilinoId,
+      usuarioId: int.tryParse(inquilinoId) ?? 0,
       titulo: 'Nueva Renta',
       mensaje: 'Has sido vinculado a: $inmuebleTitulo (\$$monto/mes)',
       tipo: 'renta',
@@ -88,13 +89,13 @@ class NotificacionesService {
 
   /// Notificar pago próximo
   static Future<void> notificarPagoProximo({
-    required int usuarioId,
+    required String usuarioId,
     required String inmuebleTitulo,
     required int dias,
     required double monto,
   }) async {
     await BaseDatos.crearNotificacion(
-      usuarioId: usuarioId,
+      usuarioId: int.tryParse(usuarioId) ?? 0,
       titulo: 'Pago Próximo',
       mensaje: 'El pago de $inmuebleTitulo vence en $dias días (\$$monto)',
       tipo: 'pago',
@@ -108,12 +109,12 @@ class NotificacionesService {
 
   /// Notificar pago vencido
   static Future<void> notificarPagoVencido({
-    required int usuarioId,
+    required String usuarioId,
     required String inmuebleTitulo,
     required double monto,
   }) async {
     await BaseDatos.crearNotificacion(
-      usuarioId: usuarioId,
+      usuarioId: int.tryParse(usuarioId) ?? 0,
       titulo: 'Pago Vencido',
       mensaje: 'El pago de $inmuebleTitulo está vencido (\$$monto)',
       tipo: 'pago',
@@ -138,12 +139,12 @@ class NotificacionesService {
 
   /// Notificar pago confirmado
   static Future<void> notificarPagoConfirmado({
-    required int usuarioId,
+    required String usuarioId,
     required String inmuebleTitulo,
     required String mes,
   }) async {
     await BaseDatos.crearNotificacion(
-      usuarioId: usuarioId,
+      usuarioId: int.tryParse(usuarioId) ?? 0,
       titulo: 'Pago Confirmado',
       mensaje: 'El pago de $mes para $inmuebleTitulo ha sido confirmado',
       tipo: 'pago',

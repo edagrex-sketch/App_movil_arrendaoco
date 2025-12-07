@@ -5,7 +5,7 @@ import 'package:arrendaoco/view/favoritos.dart';
 import 'package:arrendaoco/view/perfil.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
-  final int usuarioId;
+  final String usuarioId;
 
   const InquilinoHomeScreen({super.key, required this.usuarioId});
 
@@ -19,8 +19,8 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      ExplorarScreen(usuarioId: widget.usuarioId),
-      FavoritosScreen(usuarioId: widget.usuarioId),
+      const ExplorarScreen(),
+      const FavoritosScreen(),
       const PerfilScreen(),
     ];
 

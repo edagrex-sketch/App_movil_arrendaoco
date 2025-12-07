@@ -1,18 +1,26 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:arrendaoco/services/storage_service.dart';
 import 'package:arrendaoco/sensors/ubicacion.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:arrendaoco/widgets/map_preview_osm.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
+import 'package:arrendaoco/widgets/lottie_feedback.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class RegistrarInmuebleScreen extends StatefulWidget {
-  final int propietarioId;
+  final String propietarioId;
+  final Map<String, dynamic>? inmuebleData;
+  final String? inmuebleId;
 
-  const RegistrarInmuebleScreen({super.key, required this.propietarioId});
+  const RegistrarInmuebleScreen({
+    super.key,
+    required this.propietarioId,
+    this.inmuebleData,
+    this.inmuebleId,
+  });
 
   @override
   State<RegistrarInmuebleScreen> createState() =>
@@ -20,6 +28,9 @@ class RegistrarInmuebleScreen extends StatefulWidget {
 }
 
 class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
+  final StorageService _storageService = StorageService();
+
   final _formKey = GlobalKey<FormState>();
   final _tituloController = TextEditingController();
   final _descripcionController = TextEditingController();
@@ -56,9 +67,65 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     );
   }
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.inmuebleData != null) {
+      _cargarDatosInmueble();
+    }
+  }
+
+  void _cargarDatosInmueble() {
+    final data = widget.inmuebleData!;
+    _tituloController.text = data['titulo'] ?? '';
+    _descripcionController.text = data['descripcion'] ?? '';
+    _precioController.text = (data['precio'] ?? 0).toString();
+    // Manejar 'disponible' tanto si viene como bool (true/false) o int (1/0)
+    final disp = data['disponible'];
+    if (disp is bool) {
+      _disponible = disp;
+    } else if (disp is int) {
+      _disponible = disp == 1;
+    } else {
+      _disponible = true;
+    }
+    _categoriaSeleccionada = data['categoria'];
+    _camas = data['camas'] ?? 1;
+    _banos = data['banos'] ?? 1;
+    _tamano = data['tamano'] ?? 'Pequeño';
+
+    if (data['latitud'] != null && data['longitud'] != null) {
+      _ubicacionActual = Position(
+        latitude: data['latitud'],
+        longitude: data['longitud'],
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        heading: 0,
+        speed: 0,
+        speedAccuracy: 0,
+        altitudeAccuracy: 0,
+        headingAccuracy: 0,
+      );
+      _mensajeUbicacion =
+          'Ubicación cargada: Lat ${data['latitud'].toStringAsFixed(5)}, Lng ${data['longitud'].toStringAsFixed(5)}';
+    }
+  }
+
   Future<void> seleccionarImagenes() async {
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(
+      context,
+      message: 'Seleccionando imágenes...',
+      animationPath: 'assets/animations/uploading.json',
+    );
+
     final picker = ImagePicker();
     final imagenes = await picker.pickMultiImage();
+
+    if (!mounted) return;
+    LottieLoading.hideLoadingDialog(context);
+
     if (imagenes.isNotEmpty) {
       setState(() {
         _imagenesSeleccionadas = imagenes;
@@ -67,20 +134,43 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
   }
 
   Future<void> _obtenerUbicacion() async {
-    setState(() {
-      _mensajeUbicacion = 'Obteniendo ubicación...';
-    });
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(
+      context,
+      message: 'Obteniendo ubicación...',
+      animationPath: 'assets/animations/location.json',
+    );
+
     try {
       final posicion = await obtenerUbicacionActual();
+
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+
       setState(() {
         _ubicacionActual = posicion;
         _mensajeUbicacion =
             'Ubicación obtenida: Lat ${posicion.latitude.toStringAsFixed(5)}, Lng ${posicion.longitude.toStringAsFixed(5)}';
       });
+
+      await LottieFeedback.showSuccess(
+        context,
+        message: '¡Ubicación obtenida!',
+        duration: const Duration(milliseconds: 1500),
+      );
     } catch (e) {
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+
       setState(() {
         _mensajeUbicacion = 'Error obteniendo ubicación: $e';
       });
+
+      await LottieFeedback.showError(
+        context,
+        message: 'No se pudo obtener la ubicación',
+        duration: const Duration(milliseconds: 1500),
+      );
     }
   }
 
@@ -88,17 +178,17 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_ubicacionActual == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debes obtener la ubicación antes de guardar'),
-        ),
+      await LottieFeedback.showError(
+        context,
+        message: 'Debes obtener la ubicación antes de guardar',
       );
       return;
     }
 
-    if (_imagenesSeleccionadas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Debes seleccionar al menos una imagen')),
+    if (_imagenesSeleccionadas.isEmpty && widget.inmuebleId == null) {
+      await LottieFeedback.showError(
+        context,
+        message: 'Debes seleccionar al menos una imagen',
       );
       return;
     }
@@ -109,45 +199,89 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     final precio = double.tryParse(precioTexto.replaceAll(',', '.'));
 
     if (precio == null || precio <= 0) {
-      ScaffoldMessenger.of(
+      await LottieFeedback.showError(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Ingresa un precio válido')));
+        message: 'Ingresa un precio válido',
+      );
       return;
     }
 
-    final rutasImagenes = _imagenesSeleccionadas.map((x) => x.path).join('|');
+    final bool esEdicion = widget.inmuebleId != null;
+    final String accion = esEdicion ? 'Actualizando' : 'Guardando';
+
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(context, message: '$accion inmueble...');
 
     try {
-      final db = await BaseDatos.conecta();
-      await db.insert('inmuebles', {
+      List<String> imagePaths = [];
+      String tempId = DateTime.now().millisecondsSinceEpoch
+          .toString(); // ID Temporal para carpeta
+
+      // Guardar imágenes localmente
+      if (_imagenesSeleccionadas.isNotEmpty) {
+        imagePaths = await _storageService.uploadPropertyImages(
+          propertyId: widget.inmuebleId ?? tempId,
+          imageFiles: _imagenesSeleccionadas,
+        );
+
+        if (imagePaths.isEmpty) {
+          throw Exception('No se pudieron guardar las imágenes.');
+        }
+      } else if (widget.inmuebleData != null) {
+        // En edición, si no seleccionó nuevas, mantenemos las viejas (?)
+        // En SQLite las guardamos como string separado por comas
+        final rutasViejas = widget.inmuebleData!['rutas_imagen'] as String?;
+        if (rutasViejas != null) imagePaths = rutasViejas.split(',');
+      }
+
+      final datosInmueble = {
         'titulo': titulo,
         'descripcion': descripcion,
         'precio': precio,
-        'disponible': _disponible ? 1 : 0,
+        'disponible': _disponible ? 1 : 0, // SQLite usa INTEGER para bool
         'categoria': _categoriaSeleccionada,
-        'propietario_id': widget.propietarioId,
+        'propietario_id': int.tryParse(widget.propietarioId) ?? 0,
         'latitud': _ubicacionActual!.latitude,
         'longitud': _ubicacionActual!.longitude,
-        'rutas_imagen': rutasImagenes,
-      });
+        'rutas_imagen': imagePaths.join(','), // Guardar como texto CSV
+        'camas': _camas,
+        'banos': _banos,
+        'tamano': _tamano,
+        'estacionamiento': 0, // Default
+        'mascotas': 0, // Default
+        'visitas': 0, // Default
+        'amueblado': 0, // Default
+        'agua': 0, // Default
+        'wifi': 0, // Default
+      };
+
+      if (esEdicion) {
+        final id = int.tryParse(widget.inmuebleId.toString()) ?? 0;
+        await BaseDatos.actualizarInmueble(id, datosInmueble);
+      } else {
+        await BaseDatos.insertarInmueble(datosInmueble);
+      }
 
       if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inmueble guardado correctamente')),
+      await LottieFeedback.showSuccess(
+        context,
+        message: '¡Inmueble guardado localmente!',
+        onComplete: () {
+          if (mounted) {
+            Navigator.pop(context, true);
+          }
+        },
       );
-      Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      if (e is DatabaseException) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar inmueble: $e')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error inesperado al guardar inmueble')),
-        );
-      }
+      LottieLoading.hideLoadingDialog(context);
+
+      await LottieFeedback.showError(
+        context,
+        message: 'Error al guardar: ${e.toString()}',
+      );
     }
   }
 
@@ -165,7 +299,10 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: MiTema.azul,
-        title: Text('Nuevo inmueble', style: TextStyle(color: MiTema.crema)),
+        title: Text(
+          widget.inmuebleId != null ? 'Editar inmueble' : 'Nuevo inmueble',
+          style: TextStyle(color: MiTema.crema),
+        ),
         centerTitle: true,
         iconTheme: IconThemeData(color: MiTema.crema),
       ),
@@ -268,7 +405,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // Categoría
                         DropdownButtonFormField<String>(
-                          initialValue: _categoriaSeleccionada,
+                          value: _categoriaSeleccionada,
                           decoration: _decoracionCampo(
                             'Categoría',
                             Icons.apartment,
@@ -297,7 +434,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // CAMAS
                         DropdownButtonFormField<int>(
-                          initialValue: _camas,
+                          value: _camas,
                           decoration: _decoracionCampo(
                             'Camas',
                             Icons.bed_outlined,
@@ -323,7 +460,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // BAÑOS
                         DropdownButtonFormField<int>(
-                          initialValue: _banos,
+                          value: _banos,
                           decoration: _decoracionCampo(
                             'Baños',
                             Icons.bathtub_outlined,
@@ -349,7 +486,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
                         // TAMAÑO
                         DropdownButtonFormField<String>(
-                          initialValue: _tamano,
+                          value: _tamano,
                           decoration: _decoracionCampo(
                             'Tamaño',
                             Icons.square_foot,
@@ -432,8 +569,8 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                                 final img = _imagenesSeleccionadas[index];
                                 return ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.file(
-                                    File(img.path),
+                                  child: ImagenDinamica(
+                                    ruta: img.path,
                                     width: 220,
                                     fit: BoxFit.cover,
                                   ),
@@ -508,9 +645,11 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text(
-                              'Guardar inmueble',
-                              style: TextStyle(
+                            child: Text(
+                              widget.inmuebleId != null
+                                  ? 'Actualizar inmueble'
+                                  : 'Guardar inmueble',
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,

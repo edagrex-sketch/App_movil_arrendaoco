@@ -3,8 +3,8 @@ import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_renta.dart';
-import 'package:arrendaoco/services/notificaciones_service.dart';
-import 'dart:io';
+
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class GestionarRentasScreen extends StatefulWidget {
   const GestionarRentasScreen({super.key});
@@ -14,6 +14,7 @@ class GestionarRentasScreen extends StatefulWidget {
 }
 
 class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> _futureRentas;
 
   @override
@@ -25,7 +26,8 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
   void _cargarRentas() {
     final usuarioId = SesionActual.usuarioId;
     if (usuarioId != null) {
-      _futureRentas = BaseDatos.obtenerRentasPorArrendador(usuarioId);
+      final uid = int.tryParse(usuarioId) ?? 0;
+      _futureRentas = BaseDatos.obtenerRentasPorArrendador(uid);
     } else {
       _futureRentas = Future.value([]);
     }
@@ -103,8 +105,10 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
     final inquilino = renta['inquilino_nombre'] ?? '';
     final monto = renta['monto_mensual'] ?? 0;
     final estado = renta['estado'] ?? 'activa';
-    final rutas = (renta['rutas_imagen'] as String?) ?? '';
-    final primeraRuta = rutas.isNotEmpty ? rutas.split('|').first : null;
+
+    final imageUrlsRaw = (renta['rutas_imagen'] as String?) ?? '';
+    final imageUrls = imageUrlsRaw.isNotEmpty ? imageUrlsRaw.split(',') : [];
+    final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
     Color estadoColor;
     switch (estado) {
@@ -128,7 +132,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  DetalleRentaScreen(rentaId: renta['id'] as int),
+                  DetalleRentaScreen(rentaId: renta['id'].toString()),
             ),
           ).then((_) => setState(() => _cargarRentas()));
         },
@@ -136,13 +140,13 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (primeraRuta != null)
+            if (primeraUrl != null)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
-                child: Image.file(
-                  File(primeraRuta),
+                child: ImagenDinamica(
+                  ruta: primeraUrl,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -217,7 +221,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => DetalleRentaScreen(
-                                rentaId: renta['id'] as int,
+                                rentaId: (renta['id']).toString(),
                               ),
                             ),
                           ).then((_) => setState(() => _cargarRentas()));
@@ -230,7 +234,6 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                       ),
                       TextButton.icon(
                         onPressed: () {
-                          // Navegar a calendario compartido
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Calendario próximamente'),
@@ -259,12 +262,8 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
     if (usuarioId == null) return;
 
     // Obtener inmuebles del arrendador
-    final db = await BaseDatos.conecta();
-    final inmuebles = await db.query(
-      'inmuebles',
-      where: 'propietario_id = ?',
-      whereArgs: [usuarioId],
-    );
+    final uid = int.tryParse(usuarioId) ?? 0;
+    final inmuebles = await BaseDatos.obtenerInmueblesPorPropietario(uid);
 
     if (!mounted) return;
 
@@ -278,7 +277,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
     final inquilinoIdController = TextEditingController();
     final montoController = TextEditingController();
     final diaPagoController = TextEditingController(text: '5');
-    int? inmuebleSeleccionado;
+    String? inmuebleSeleccionado;
     DateTime fechaInicio = DateTime.now();
 
     showModalBottomSheet(
@@ -313,15 +312,15 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                   builder: (context, setModalState) {
                     return Column(
                       children: [
-                        DropdownButtonFormField<int>(
+                        DropdownButtonFormField<String>(
                           decoration: const InputDecoration(
                             labelText: 'Inmueble',
                             border: OutlineInputBorder(),
                           ),
                           value: inmuebleSeleccionado,
                           items: inmuebles.map((i) {
-                            return DropdownMenuItem<int>(
-                              value: i['id'] as int,
+                            return DropdownMenuItem<String>(
+                              value: (i['id']).toString(),
                               child: Text(i['titulo'].toString()),
                             );
                           }).toList(),
@@ -336,10 +335,9 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                           controller: inquilinoIdController,
                           decoration: const InputDecoration(
                             labelText: 'ID del Inquilino',
-                            hintText: 'Ej: 5',
+                            hintText: 'Ej: 15',
                             border: OutlineInputBorder(),
                           ),
-                          keyboardType: TextInputType.number,
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -406,14 +404,18 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                       }
 
                       final inquilinoId = int.tryParse(
-                        inquilinoIdController.text,
+                        inquilinoIdController.text.trim(),
                       );
                       if (inquilinoId == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('ID de inquilino inválido'),
-                          ),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'ID de inquilino inválido (debe ser numérico)',
+                              ),
+                            ),
+                          );
+                        }
                         return;
                       }
 
@@ -426,25 +428,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'El ID no corresponde a un inquilino',
-                              ),
-                            ),
-                          );
-                        }
-                        return;
-                      }
-
-                      // Verificar que el inmueble no tiene renta activa
-                      final tieneRenta =
-                          await BaseDatos.inmuebleTieneRentaActiva(
-                            inmuebleSeleccionado!,
-                          );
-                      if (tieneRenta) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Este inmueble ya tiene una renta activa',
+                                'No existe un inquilino con ese ID',
                               ),
                             ),
                           );
@@ -476,10 +460,15 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                         return;
                       }
 
+                      // Obtener datos del inmueble
+                      final iid = int.tryParse(inmuebleSeleccionado!) ?? 0;
+                      // inmuebleData is implicit in DB relations but we need it for notification title if we want
+
                       // Crear renta
+                      // Note: bd.dart method crearRenta returns int
                       final rentaId = await BaseDatos.crearRenta({
-                        'inmueble_id': inmuebleSeleccionado,
-                        'arrendador_id': usuarioId,
+                        'inmueble_id': iid,
+                        'arrendador_id': uid,
                         'inquilino_id': inquilinoId,
                         'fecha_inicio': fechaInicio.toIso8601String(),
                         'monto_mensual': monto,
@@ -496,17 +485,13 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                         12,
                       );
 
-                      // Obtener título del inmueble para notificación
-                      final inmuebleData = inmuebles.firstWhere(
-                        (i) => i['id'] == inmuebleSeleccionado,
-                      );
-                      final tituloInmueble = inmuebleData['titulo'].toString();
-
-                      // Notificar al inquilino
-                      await NotificacionesService.notificarNuevaRenta(
-                        inquilinoId: inquilinoId,
-                        inmuebleTitulo: tituloInmueble,
-                        monto: monto,
+                      // Notificar al inquilino (Local DB notification)
+                      await BaseDatos.crearNotificacion(
+                        usuarioId: inquilinoId,
+                        titulo: 'Nueva Renta Asignada',
+                        mensaje:
+                            'Se te ha asignado una renta de monto \$$monto',
+                        tipo: 'renta',
                       );
 
                       if (context.mounted) {

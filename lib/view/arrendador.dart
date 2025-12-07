@@ -1,15 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
 import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/perfil.dart';
+
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/model/bd.dart';
 
 class ArrendadorScreen extends StatefulWidget {
-  final int usuarioId;
+  final String usuarioId;
 
   const ArrendadorScreen({super.key, required this.usuarioId});
 
@@ -60,7 +59,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                   ),
                 );
                 setState(() {
-                  // Reconstruye el feed para ver el nuevo inmueble
+                  // Reconstruye el feed
                 });
               },
               backgroundColor: MiTema.celeste,
@@ -114,7 +113,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
 }
 
 class InicioFeed extends StatefulWidget {
-  final int usuarioId;
+  final String usuarioId;
 
   const InicioFeed({super.key, required this.usuarioId});
 
@@ -123,6 +122,7 @@ class InicioFeed extends StatefulWidget {
 }
 
 class InicioFeedState extends State<InicioFeed> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> futureInmuebles;
 
   @override
@@ -132,13 +132,10 @@ class InicioFeedState extends State<InicioFeed> {
   }
 
   Future<List<Map<String, dynamic>>> cargarInmuebles() async {
-    final db = await BaseDatos.conecta();
-    return db.query(
-      'inmuebles',
-      where: 'propietario_id = ?',
-      whereArgs: [widget.usuarioId],
-      orderBy: 'id DESC',
-    );
+    // Cargar todos y filtrar localmente por propietario_id
+    final todos = await BaseDatos.obtenerInmuebles();
+    final uid = int.tryParse(widget.usuarioId) ?? 0;
+    return todos.where((i) => i['propietario_id'] == uid).toList();
   }
 
   @override
@@ -151,7 +148,6 @@ class InicioFeedState extends State<InicioFeed> {
         }
 
         if (snapshot.hasError) {
-          // ignore: avoid_print
           print(snapshot.error);
           return const Center(child: Text('Error al cargar inmuebles'));
         }
@@ -171,10 +167,11 @@ class InicioFeedState extends State<InicioFeed> {
             final descripcion = i['descripcion'] ?? '';
             final precio = i['precio'] ?? 0;
             final categoria = i['categoria'] ?? '';
-            final rutas = i['rutas_imagen'] as String? ?? '';
-            final primeraRuta = rutas.isNotEmpty
-                ? rutas.split('|').first
-                : null;
+
+            // Handle images
+            final rutasRaw = i['rutas_imagen'] as String? ?? '';
+            final rutas = rutasRaw.isEmpty ? [] : rutasRaw.split(',');
+            final primeraRuta = rutas.isNotEmpty ? rutas.first : null;
 
             return Card(
               elevation: 4,
@@ -192,8 +189,8 @@ class InicioFeedState extends State<InicioFeed> {
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(16),
                       ),
-                      child: Image.file(
-                        File(primeraRuta),
+                      child: ImagenDinamica(
+                        ruta: primeraRuta,
                         height: 180,
                         width: double.infinity,
                         fit: BoxFit.cover,
@@ -242,18 +239,23 @@ class InicioFeedState extends State<InicioFeed> {
                           children: [
                             TextButton.icon(
                               onPressed: () async {
-                                await Navigator.push(
+                                final resultado = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => RegistrarInmuebleScreen(
-                                      propietarioId: widget.usuarioId,
-                                      // Más adelante puedes pasar el inmueble para edición real
-                                    ),
+                                    builder: (context) =>
+                                        RegistrarInmuebleScreen(
+                                          propietarioId: widget.usuarioId,
+                                          inmuebleId: i['id'].toString(),
+                                          inmuebleData: i,
+                                        ),
                                   ),
                                 );
-                                setState(() {
-                                  futureInmuebles = cargarInmuebles();
-                                });
+                                // Si hubo cambios, recargar la lista
+                                if (resultado == true) {
+                                  setState(() {
+                                    futureInmuebles = cargarInmuebles();
+                                  });
+                                }
                               },
                               icon: Icon(
                                 Icons.edit,
@@ -301,11 +303,8 @@ class InicioFeedState extends State<InicioFeed> {
                                 );
 
                                 if (confirmar == true) {
-                                  final db = await BaseDatos.conecta();
-                                  await db.delete(
-                                    'inmuebles',
-                                    where: 'id = ?',
-                                    whereArgs: [i['id']],
+                                  await BaseDatos.eliminarInmueble(
+                                    i['id'] as int,
                                   );
                                   setState(() {
                                     futureInmuebles = cargarInmuebles();

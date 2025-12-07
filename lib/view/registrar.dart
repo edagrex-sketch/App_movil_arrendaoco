@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
-import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/view/login.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
+import 'package:arrendaoco/widgets/lottie_feedback.dart';
+import 'package:arrendaoco/services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String rolInicial; // Recibe el rol elegido
@@ -15,9 +16,10 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _userController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final AuthService _authService = AuthService();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -33,47 +35,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final username = _userController.text.trim();
+    final email = _emailController.text.trim();
     final nombre = _nameController.text.trim();
     final password = _passwordController.text;
-    final rol = _selectedRol;
+    final rol = _selectedRol!;
+
+    // Mostrar animación de carga
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(context, message: 'Registrando usuario...');
 
     try {
-      final db = await BaseDatos.conecta();
-      await db.insert('usuarios', {
-        'username': username,
-        'nombre': nombre,
-        'password': password,
-        'rol': rol,
-      });
+      final result = await _authService.signUp(
+        email: email,
+        password: password,
+        nombre: nombre,
+        rol: rol,
+      );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Usuario registrado correctamente')),
-      );
-      // Navegar al login después de registrarse
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    } catch (e) {
-      if (e is DatabaseException && e.isUniqueConstraintError()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ese nombre de usuario ya existe, elige otro.'),
-          ),
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+
+      if (result['success']) {
+        // Mostrar animación de éxito
+        await LottieFeedback.showSuccess(
+          context,
+          message: '¡Usuario registrado correctamente!',
+          onComplete: () {
+            // Navegar al login después de registrarse
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          },
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al registrar usuario: $e')),
+        await LottieFeedback.showError(
+          context,
+          message: result['message'] ?? 'Error al registrar usuario',
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+      await LottieFeedback.showError(
+        context,
+        message: 'Error: ${e.toString()}',
+      );
     }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _userController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -117,20 +131,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _userController,
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  labelText: 'Usuario',
+                  labelText: 'Email',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10.0),
                   ),
-                  prefixIcon: const Icon(Icons.account_circle),
+                  prefixIcon: const Icon(Icons.email),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Ingresa un nombre de usuario';
+                    return 'Ingresa un email';
                   }
-                  if (value.trim().length < 4) {
-                    return 'El usuario debe tener al menos 4 caracteres';
+                  if (!value.contains('@') || !value.contains('.')) {
+                    return 'Ingresa un email válido';
                   }
                   return null;
                 },

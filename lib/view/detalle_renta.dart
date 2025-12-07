@@ -1,11 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class DetalleRentaScreen extends StatefulWidget {
-  final int rentaId;
+  final String rentaId;
 
   const DetalleRentaScreen({super.key, required this.rentaId});
 
@@ -14,6 +14,7 @@ class DetalleRentaScreen extends StatefulWidget {
 }
 
 class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<Map<String, dynamic>?> _futureRenta;
   late Future<List<Map<String, dynamic>>> _futurePagos;
 
@@ -24,8 +25,9 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
   }
 
   void _cargarDatos() {
-    _futureRenta = BaseDatos.obtenerRentaPorId(widget.rentaId);
-    _futurePagos = BaseDatos.obtenerPagosPorRenta(widget.rentaId);
+    final rId = int.tryParse(widget.rentaId) ?? 0;
+    _futureRenta = BaseDatos.obtenerRentaPorId(rId);
+    _futurePagos = BaseDatos.obtenerPagosPorRenta(rId);
   }
 
   @override
@@ -53,12 +55,15 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
           }
 
           final esArrendador = usuarioId == renta['arrendador_id'];
-          final titulo = renta['inmueble_titulo'] ?? '';
           final monto = renta['monto_mensual'] ?? 0;
           final diaPago = renta['dia_pago'] ?? 0;
           final estado = renta['estado'] ?? 'activa';
-          final rutas = (renta['rutas_imagen'] as String?) ?? '';
-          final primeraRuta = rutas.isNotEmpty ? rutas.split('|').first : null;
+          final inmuebleTitulo = renta['inmueble_titulo'] ?? 'Inmueble';
+          final imageUrlsRaw = (renta['rutas_imagen'] as String?) ?? '';
+          final imageUrls = imageUrlsRaw.isNotEmpty
+              ? imageUrlsRaw.split(',')
+              : [];
+          final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
           final otraParte = esArrendador
               ? renta['inquilino_nombre']
@@ -69,20 +74,21 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (primeraRuta != null)
-                  Image.file(
-                    File(primeraRuta),
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                if (primeraUrl != null)
+                  if (primeraUrl != null)
+                    ImagenDinamica(
+                      ruta: primeraUrl,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        titulo,
+                        inmuebleTitulo,
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,

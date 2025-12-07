@@ -3,8 +3,11 @@ import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
 import 'package:arrendaoco/theme/tema.dart';
-import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/services/auth_service.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
+import 'package:arrendaoco/widgets/lottie_feedback.dart';
+import 'package:arrendaoco/services/fcm_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,94 +17,111 @@ class LoginScreen extends StatefulWidget {
 }
 
 class LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController(); // username
+  final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  final AuthService _authService = AuthService();
 
   Future<void> login() async {
     if (!formKey.currentState!.validate()) return;
 
-    final username = emailController.text.trim();
+    final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    try {
-      final db = await BaseDatos.conecta();
+    // Mostrar loading
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(context, message: 'Iniciando sesión...');
 
-      final res = await db.query(
-        'usuarios',
-        where: 'username = ? AND password = ?',
-        whereArgs: [username, password],
-        limit: 1,
+    try {
+      final result = await _authService.signInWithEmail(
+        email: email,
+        password: password,
       );
 
-      if (res.isNotEmpty) {
-        final usuario = res.first;
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
 
-        final dynamic idValue = usuario['id'];
-        if (idValue == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Usuario sin id en la BD')),
-          );
-          return;
-        }
-
-        int usuarioId;
-        if (idValue is int) {
-          usuarioId = idValue;
-        } else if (idValue is num) {
-          usuarioId = idValue.toInt();
-        } else if (idValue is String) {
-          usuarioId = int.tryParse(idValue) ?? 0;
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Tipo inesperado para id: ${idValue.runtimeType}'),
-            ),
-          );
-          return;
-        }
-
-        if (usuarioId == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Id de usuario inválido')),
-          );
-          return;
-        }
+      if (result['success']) {
+        final userData = result['userData'] as Map<String, dynamic>;
+        final user = result['user'];
 
         // GUARDAR SESIÓN
-        SesionActual.usuarioId = usuarioId;
-        SesionActual.nombre = (usuario['nombre'] ?? usuario['username'] ?? '')
-            .toString();
-
-        // Obtener el rol del usuario
-        final rol = (usuario['rol'] ?? 'Inquilino').toString();
+        SesionActual.usuarioId = user.uid;
+        SesionActual.nombre = userData['nombre'] ?? '';
+        SesionActual.email = userData['email'] ?? '';
+        SesionActual.rol = userData['rol'] ?? 'Inquilino';
+        SesionActual.publicId = userData['public_id'];
 
         // Navegar según el rol
-        if (rol == 'Arrendador') {
+        if (SesionActual.rol == 'Arrendador') {
+          // Inicializar notificaciones realtime
+          if (SesionActual.usuarioId != null) {
+            final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
+            if (uid > 0) FCMService.initialize(uid);
+          }
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => ArrendadorScreen(usuarioId: usuarioId),
+              builder: (context) => ArrendadorScreen(usuarioId: user.uid),
             ),
           );
         } else {
-          // Inquilino o cualquier otro rol
+          // Inicializar notificaciones realtime
+          if (SesionActual.usuarioId != null) {
+            final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
+            if (uid > 0) FCMService.initialize(uid);
+          }
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => InquilinoHomeScreen(usuarioId: usuarioId),
+              builder: (context) => InquilinoHomeScreen(usuarioId: user.uid),
             ),
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Usuario o contraseña incorrectos')),
+        await LottieFeedback.showError(
+          context,
+          message: result['message'] ?? 'Error al iniciar sesión',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+      await LottieFeedback.showError(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error al iniciar sesión: $e')));
+        message: 'Error: ${e.toString()}',
+      );
+    }
+  }
+
+  Future<void> resetPassword() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa tu usuario o email primero')),
+      );
+      return;
+    }
+
+    LottieLoading.showLoadingDialog(context, message: 'Enviando email...');
+
+    final result = await _authService.resetPassword(email);
+
+    if (!mounted) return;
+    LottieLoading.hideLoadingDialog(context);
+
+    if (result['success']) {
+      await LottieFeedback.showSuccess(
+        context,
+        message: 'Email de recuperación enviado',
+      );
+    } else {
+      await LottieFeedback.showError(
+        context,
+        message: result['message'] ?? 'Error al enviar email',
+      );
     }
   }
 
@@ -120,90 +140,106 @@ class LoginScreenState extends State<LoginScreen> {
         title: Text('Iniciar sesión', style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Image.asset('assets/images/logo.png', height: 100),
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Usuario',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  prefixIcon: const Icon(Icons.person),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Image.asset('assets/images/logo.png', height: 100),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu usuario';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  prefixIcon: const Icon(Icons.lock),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa tu contraseña';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 30),
-              ElevatedButton(
-                onPressed: login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: MiTema.celeste,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 50,
-                    vertical: 15,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'Iniciar sesión',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => SeleccionarRolScreen(),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.0),
                     ),
-                  );
-                },
-                child: const Text(
-                  '¿No tienes cuenta? Regístrate!',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
+                    prefixIcon: const Icon(Icons.email),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Ingresa tu email';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Ingresa un email válido';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.0),
+                    ),
+                    prefixIcon: const Icon(Icons.lock),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Ingresa tu contraseña';
+                    }
+                    return null;
+                  },
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: resetPassword,
+                    child: const Text(
+                      '¿Olvidaste tu contraseña?',
+                      style: TextStyle(fontSize: 14),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MiTema.celeste,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 50,
+                      vertical: 15,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Iniciar sesión',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SeleccionarRolScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    '¿No tienes cuenta? Regístrate!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

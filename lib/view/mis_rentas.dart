@@ -1,7 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
+
 import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_renta.dart';
 
@@ -13,6 +14,7 @@ class MisRentasScreen extends StatefulWidget {
 }
 
 class _MisRentasScreenState extends State<MisRentasScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> _futureRentas;
 
   @override
@@ -24,7 +26,8 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
   void _cargarRentas() {
     final usuarioId = SesionActual.usuarioId;
     if (usuarioId != null) {
-      _futureRentas = BaseDatos.obtenerRentasPorInquilino(usuarioId);
+      final uid = int.tryParse(usuarioId) ?? 0;
+      _futureRentas = BaseDatos.obtenerRentasPorInquilino(uid);
     } else {
       _futureRentas = Future.value([]);
     }
@@ -93,8 +96,11 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     final monto = renta['monto_mensual'] ?? 0;
     final diaPago = renta['dia_pago'] ?? 0;
     final estado = renta['estado'] ?? 'activa';
-    final rutas = (renta['rutas_imagen'] as String?) ?? '';
-    final primeraRuta = rutas.isNotEmpty ? rutas.split('|').first : null;
+
+    // SQLite returns 'rutas_imagen' as comma separated string
+    final rutasRaw = (renta['rutas_imagen'] as String?) ?? '';
+    final imageUrls = rutasRaw.isNotEmpty ? rutasRaw.split(',') : [];
+    final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
     Color estadoColor;
     switch (estado) {
@@ -118,7 +124,8 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  DetalleRentaScreen(rentaId: renta['id'] as int),
+                  // FIX: use toString() here
+                  DetalleRentaScreen(rentaId: renta['id'].toString()),
             ),
           ).then((_) => setState(() => _cargarRentas()));
         },
@@ -126,13 +133,13 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (primeraRuta != null)
+            if (primeraUrl != null)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),
-                child: Image.file(
-                  File(primeraRuta),
+                child: ImagenDinamica(
+                  ruta: primeraUrl,
                   height: 150,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -220,8 +227,9 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                DetalleRentaScreen(rentaId: renta['id'] as int),
+                            builder: (context) => DetalleRentaScreen(
+                              rentaId: (renta['id']).toString(),
+                            ),
                           ),
                         ).then((_) => setState(() => _cargarRentas()));
                       },

@@ -1,0 +1,52 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Función helper para verificar autenticación
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Función helper para verificar tamaño de archivo (máximo 5MB)
+    function isValidSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Función helper para verificar tipo de imagen
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // IMÁGENES DE PROPIEDADES
+    // Cualquiera puede leer, solo usuarios autenticados pueden escribir
+    match /properties/{propertyId}/{allPaths=**} {
+      // Lectura pública para mostrar imágenes en la app
+      allow read: if true;
+      
+      // Solo usuarios autenticados pueden subir imágenes
+      // Validar que sea una imagen y no exceda 5MB
+      allow write: if isSignedIn() && 
+                     isImage() && 
+                     isValidSize();
+    }
+    
+    // FOTOS DE PERFIL
+    // Cualquiera puede leer, solo el dueño puede escribir
+    match /profiles/{userId}/{allPaths=**} {
+      // Lectura pública para mostrar fotos de perfil
+      allow read: if true;
+      
+      // Solo el usuario puede subir/modificar su propia foto
+      // Validar que sea una imagen y no exceda 5MB
+      allow write: if isSignedIn() && 
+                     request.auth.uid == userId && 
+                     isImage() && 
+                     isValidSize();
+    }
+    
+    // Denegar acceso a cualquier otra ruta no especificada
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

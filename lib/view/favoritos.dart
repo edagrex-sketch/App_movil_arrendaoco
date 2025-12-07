@@ -1,30 +1,32 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class FavoritosScreen extends StatefulWidget {
-  final int usuarioId;
-
-  const FavoritosScreen({super.key, required this.usuarioId});
+  const FavoritosScreen({super.key});
 
   @override
   State<FavoritosScreen> createState() => _FavoritosScreenState();
 }
 
 class _FavoritosScreenState extends State<FavoritosScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> _futureFavoritos;
 
   @override
   void initState() {
     super.initState();
-    _futureFavoritos = BaseDatos.obtenerFavoritos(widget.usuarioId);
+    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
+    _futureFavoritos = BaseDatos.obtenerFavoritos(uid);
   }
 
   void _recargarFavoritos() {
     setState(() {
-      _futureFavoritos = BaseDatos.obtenerFavoritos(widget.usuarioId);
+      final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
+      _futureFavoritos = BaseDatos.obtenerFavoritos(uid);
     });
   }
 
@@ -97,9 +99,13 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                   final titulo = inmueble['titulo'] ?? '';
                   final precio = inmueble['precio'] ?? 0;
                   final categoria = inmueble['categoria'] ?? '';
-                  final rutas = (inmueble['rutas_imagen'] as String?) ?? '';
-                  final primeraRuta = rutas.isNotEmpty
-                      ? rutas.split('|').first
+                  final imageUrlsRaw =
+                      (inmueble['rutas_imagen'] as String?) ?? '';
+                  final imageUrls = imageUrlsRaw.isNotEmpty
+                      ? imageUrlsRaw.split(',')
+                      : [];
+                  final primeraUrl = imageUrls.isNotEmpty
+                      ? imageUrls.first
                       : null;
 
                   return Card(
@@ -115,7 +121,7 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                           MaterialPageRoute(
                             builder: (context) => DetalleInmuebleScreen(
                               inmueble: inmueble,
-                              usuarioId: widget.usuarioId,
+                              usuarioId: SesionActual.usuarioId,
                             ),
                           ),
                         ).then((_) => _recargarFavoritos());
@@ -126,13 +132,13 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                         children: [
                           Stack(
                             children: [
-                              if (primeraRuta != null)
+                              if (primeraUrl != null)
                                 ClipRRect(
                                   borderRadius: const BorderRadius.vertical(
                                     top: Radius.circular(16),
                                   ),
-                                  child: Image.file(
-                                    File(primeraRuta),
+                                  child: ImagenDinamica(
+                                    ruta: primeraUrl,
                                     height: 180,
                                     width: double.infinity,
                                     fit: BoxFit.cover,
@@ -149,9 +155,16 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                                       color: MiTema.rojo,
                                     ),
                                     onPressed: () async {
+                                      final uid =
+                                          int.tryParse(
+                                            SesionActual.usuarioId!,
+                                          ) ??
+                                          0;
+                                      final iid = inmueble['id'] as int;
+
                                       await BaseDatos.eliminarFavorito(
-                                        widget.usuarioId,
-                                        inmueble['id'] as int,
+                                        uid,
+                                        iid,
                                       );
                                       _recargarFavoritos();
                                       if (context.mounted) {

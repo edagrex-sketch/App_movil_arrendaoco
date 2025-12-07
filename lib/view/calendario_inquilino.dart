@@ -12,6 +12,7 @@ class CalendarioInquilinoScreen extends StatefulWidget {
 }
 
 class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> _futureEventos;
   DateTime _selectedDate = DateTime.now();
 
@@ -24,7 +25,8 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
   void _cargarEventos() {
     final usuarioId = SesionActual.usuarioId;
     if (usuarioId != null) {
-      _futureEventos = BaseDatos.obtenerEventosPorUsuario(usuarioId);
+      final uid = int.tryParse(usuarioId) ?? 0;
+      _futureEventos = BaseDatos.obtenerEventosPorUsuario(uid);
     } else {
       _futureEventos = Future.value([]);
     }
@@ -374,8 +376,9 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
                     final usuarioId = SesionActual.usuarioId;
                     if (usuarioId == null) return;
 
+                    final uid = int.tryParse(usuarioId) ?? 0;
                     await BaseDatos.agregarEvento({
-                      'usuario_id': usuarioId,
+                      'usuario_id': uid,
                       'titulo': tituloController.text.trim(),
                       'descripcion': descripcionController.text.trim(),
                       'fecha': fechaSeleccionada.toIso8601String(),

@@ -1,14 +1,13 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/widgets/map_preview_osm.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class DetalleInmuebleScreen extends StatefulWidget {
   final Map inmueble;
-  final int? usuarioId;
+  final String? usuarioId;
 
   const DetalleInmuebleScreen({
     super.key,
@@ -21,6 +20,7 @@ class DetalleInmuebleScreen extends StatefulWidget {
 }
 
 class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late PageController _pageController;
   int _currentImageIndex = 0;
   List<Map<String, dynamic>> _resenas = [];
@@ -43,11 +43,10 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
   }
 
   Future<void> _verificarFavorito() async {
-    if (widget.usuarioId != null) {
-      final esFav = await BaseDatos.esFavorito(
-        widget.usuarioId!,
-        widget.inmueble['id'] as int,
-      );
+    if (SesionActual.usuarioId != null) {
+      final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
+      final iid = widget.inmueble['id'] as int;
+      final esFav = await BaseDatos.esFavorito(uid, iid);
       if (mounted) {
         setState(() {
           _esFavorito = esFav;
@@ -58,9 +57,10 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
 
   Future<void> _cargarResenas() async {
     try {
-      final inmuebleId = int.parse(widget.inmueble['id'].toString());
-      final lista = await BaseDatos.obtenerResenasPorInmueble(inmuebleId);
-      final resumen = await BaseDatos.obtenerResumenResenas(inmuebleId);
+      final iid = widget.inmueble['id'] as int;
+      final lista = await BaseDatos.obtenerResenasPorInmueble(iid);
+      final resumen = await BaseDatos.obtenerResumenResenas(iid);
+
       if (!mounted) return;
       setState(() {
         _resenas = List<Map<String, dynamic>>.from(lista);
@@ -82,35 +82,38 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     final descripcion = inmueble['descripcion'] ?? '';
     final precio = inmueble['precio'] ?? 0;
     final categoria = inmueble['categoria'] ?? '';
-    final disponible = (inmueble['disponible'] as int?) == 1;
-    final latitud = inmueble['latitud'] ?? 0.0;
-    final longitud = inmueble['longitud'] ?? 0.0;
-    final rutasStr = (inmueble['rutas_imagen'] as String?) ?? '';
-    final imagenes = rutasStr.isNotEmpty ? rutasStr.split('|') : [];
+    final disponible =
+        inmueble['disponible'] == true || (inmueble['disponible'] as int?) == 1;
+    final latitud = (inmueble['latitud'] as num?)?.toDouble() ?? 0.0;
+    final longitud = (inmueble['longitud'] as num?)?.toDouble() ?? 0.0;
 
-    // De momento son constantes
-    const camas = 2;
-    const banos = 1;
-    const metros = 80;
+    // Parse images local
+    final rutasRaw = inmueble['rutas_imagen'] as String? ?? '';
+    final rutas = rutasRaw.isEmpty ? [] : rutasRaw.split(',');
+    final imagenes = rutas;
+
+    final camas = inmueble['camas'] ?? 2;
+    final banos = inmueble['banos'] ?? 1;
+    final metros = inmueble['tamano'] ?? '80';
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: MiTema.azul,
         foregroundColor: MiTema.crema,
-        title: Text(titulo, style: TextStyle(color: MiTema.crema)),
+        title: Text(titulo.toString(), style: TextStyle(color: MiTema.crema)),
         centerTitle: true,
         actions: [
-          if (widget.usuarioId != null)
+          if (SesionActual.usuarioId != null)
             IconButton(
               icon: Icon(_esFavorito ? Icons.favorite : Icons.favorite_border),
               color: MiTema.crema,
               onPressed: () async {
+                final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
+                final iid = inmueble['id'] as int;
+
                 if (_esFavorito) {
-                  await BaseDatos.eliminarFavorito(
-                    widget.usuarioId!,
-                    inmueble['id'] as int,
-                  );
+                  await BaseDatos.eliminarFavorito(uid, iid);
                   if (mounted) {
                     setState(() {
                       _esFavorito = false;
@@ -120,10 +123,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     );
                   }
                 } else {
-                  await BaseDatos.agregarFavorito(
-                    widget.usuarioId!,
-                    inmueble['id'] as int,
-                  );
+                  await BaseDatos.agregarFavorito(uid, iid);
                   if (mounted) {
                     setState(() {
                       _esFavorito = true;
@@ -153,8 +153,8 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                       },
                       itemCount: imagenes.length,
                       itemBuilder: (context, index) {
-                        return Image.file(
-                          File(imagenes[index]),
+                        return ImagenDinamica(
+                          ruta: imagenes[index],
                           fit: BoxFit.cover,
                         );
                       },
@@ -231,7 +231,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    categoria,
+                    categoria.toString(),
                     style: TextStyle(
                       fontSize: 16,
                       color: MiTema.celeste,
@@ -261,9 +261,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                           children: [
                             Icon(Icons.bed_outlined, color: MiTema.azul),
                             const SizedBox(height: 4),
-                            const Text(
+                            Text(
                               '$camas',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -281,9 +281,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                           children: [
                             Icon(Icons.bathtub_outlined, color: MiTema.azul),
                             const SizedBox(height: 4),
-                            const Text(
+                            Text(
                               '$banos',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -301,9 +301,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                           children: [
                             Icon(Icons.square_foot, color: MiTema.azul),
                             const SizedBox(height: 4),
-                            const Text(
+                            Text(
                               '$metros',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -333,7 +333,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    descripcion,
+                    descripcion.toString(),
                     style: TextStyle(
                       fontSize: 14,
                       color: MiTema.negro.withOpacity(0.8),
@@ -382,7 +382,6 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Aquí ya no hay botones de "Contactar al propietario" ni "Reserver"
                 ],
               ),
             ),
@@ -602,26 +601,23 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                   onPressed: () async {
                     if (ratingSeleccionado < 1) return;
                     try {
-                      final inmuebleId = int.parse(
-                        widget.inmueble['id'].toString(),
-                      );
                       final nombreSesion = SesionActual.nombre;
-                      final nombre =
-                          (nombreSesion == null || nombreSesion.trim().isEmpty)
+                      final nombre = (nombreSesion.trim().isEmpty)
                           ? 'Anónimo'
                           : nombreSesion.trim();
                       final comentario = comentarioController.text.trim();
-                      final fecha = DateTime.now()
-                          .toIso8601String()
-                          .split('T')
-                          .first;
+
+                      final iid = widget.inmueble['id'] as int;
+                      // final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0; // Unused
+
                       await BaseDatos.insertarResena({
-                        'inmueble_id': inmuebleId,
+                        'inmueble_id': iid,
                         'usuario_nombre': nombre,
                         'rating': ratingSeleccionado,
                         'comentario': comentario,
-                        'fecha': fecha,
+                        'fecha': DateTime.now().toIso8601String(),
                       });
+
                       if (mounted) {
                         Navigator.pop(context);
                         await _cargarResenas();

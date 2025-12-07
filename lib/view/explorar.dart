@@ -1,25 +1,31 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
-import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
+import 'package:arrendaoco/widgets/lottie_feedback.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/model/bd.dart';
 
 class ExplorarScreen extends StatefulWidget {
-  final int? usuarioId;
-
-  const ExplorarScreen({super.key, this.usuarioId});
+  const ExplorarScreen({super.key});
 
   @override
   State<ExplorarScreen> createState() => _ExplorarScreenState();
 }
 
 class _ExplorarScreenState extends State<ExplorarScreen> {
+  // final FirestoreService _firestoreService = FirestoreService();
   late Future<List<Map<String, dynamic>>> _futureInmuebles;
+
   String _busqueda = '';
   String? _categoriaSeleccionada;
-
-  final List<String> _categorias = ['Casa', 'Departamento', 'Cuarto'];
+  final List<String> _categorias = [
+    'Departamento',
+    'Casa',
+    'Habitación',
+    'Local',
+  ];
 
   @override
   void initState() {
@@ -28,8 +34,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _cargarInmuebles() async {
-    final db = await BaseDatos.conecta();
-    return db.query('inmuebles', orderBy: 'id DESC');
+    return await BaseDatos.obtenerInmuebles();
   }
 
   List<Map<String, dynamic>> _aplicarFiltros(
@@ -58,7 +63,10 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
       future: _futureInmuebles,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const LottieLoading(
+            message: 'Cargando inmuebles...',
+            size: 200,
+          );
         }
         if (snapshot.hasError) {
           print(snapshot.error);
@@ -160,15 +168,19 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                         final descripcion = i['descripcion'] ?? '';
                         final precio = i['precio'] ?? 0;
                         final categoria = i['categoria'] ?? '';
-                        final rutas = (i['rutas_imagen'] as String?) ?? '';
+
+                        // Handle images local
+                        final rutasRaw = i['rutas_imagen'] as String? ?? '';
+                        final rutas = rutasRaw.isEmpty
+                            ? []
+                            : rutasRaw.split(',');
                         final primeraRuta = rutas.isNotEmpty
-                            ? rutas.split('|').first
+                            ? rutas.first
                             : null;
 
-                        // Datos de ejemplo para cuartos/baños/área
-                        const recamaras = 2;
-                        const banos = 1;
-                        const metros = 80;
+                        final camas = i['camas'] ?? 2;
+                        final banos = i['banos'] ?? 1;
+                        final tamano = i['tamano'] ?? '80';
 
                         final direccionCorta = descripcion
                             .toString()
@@ -184,84 +196,110 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Stack(
-                                children: [
-                                  if (primeraRuta != null)
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(16),
-                                      ),
-                                      child: Image.file(
-                                        File(primeraRuta),
-                                        height: 180,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  if (widget.usuarioId != null)
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: FutureBuilder<bool>(
-                                        future: BaseDatos.esFavorito(
-                                          widget.usuarioId!,
-                                          i['id'] as int,
-                                        ),
-                                        builder: (context, snapshot) {
-                                          final esFav = snapshot.data ?? false;
-                                          return CircleAvatar(
-                                            backgroundColor: Colors.white,
-                                            child: IconButton(
-                                              icon: Icon(
-                                                esFav
-                                                    ? Icons.favorite
-                                                    : Icons.favorite_border,
-                                                color: esFav
-                                                    ? MiTema.rojo
-                                                    : Colors.grey,
-                                              ),
-                                              onPressed: () async {
-                                                if (esFav) {
-                                                  await BaseDatos.eliminarFavorito(
-                                                    widget.usuarioId!,
-                                                    i['id'] as int,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Eliminado de favoritos',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                } else {
-                                                  await BaseDatos.agregarFavorito(
-                                                    widget.usuarioId!,
-                                                    i['id'] as int,
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Agregado a favoritos',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                }
-                                                setState(() {});
-                                              },
+                              SizedBox(
+                                height: 180,
+                                width: double.infinity,
+                                child: Stack(
+                                  children: [
+                                    if (primeraRuta != null)
+                                      ClipRRect(
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                              top: Radius.circular(16),
                                             ),
-                                          );
-                                        },
+                                        child: ImagenDinamica(
+                                          ruta: primeraRuta,
+                                          height: 180,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
-                                    ),
-                                ],
+                                    if (SesionActual.usuarioId != null)
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: FutureBuilder<bool>(
+                                          future: Future.value(false).then((
+                                            _,
+                                          ) async {
+                                            // Wrap for strict logic
+                                            final uid =
+                                                int.tryParse(
+                                                  SesionActual.usuarioId!,
+                                                ) ??
+                                                0;
+                                            final iid = i['id'] as int;
+                                            return await BaseDatos.esFavorito(
+                                              uid,
+                                              iid,
+                                            );
+                                          }),
+                                          builder: (context, snapshot) {
+                                            final esFav =
+                                                snapshot.data ?? false;
+                                            return CircleAvatar(
+                                              backgroundColor: Colors.white,
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  esFav
+                                                      ? Icons.favorite
+                                                      : Icons.favorite_border,
+                                                  color: esFav
+                                                      ? MiTema.rojo
+                                                      : Colors.grey,
+                                                ),
+                                                onPressed: () async {
+                                                  final uid =
+                                                      int.tryParse(
+                                                        SesionActual.usuarioId!,
+                                                      ) ??
+                                                      0;
+                                                  final iid = i['id'] as int;
+
+                                                  if (esFav) {
+                                                    await BaseDatos.eliminarFavorito(
+                                                      uid,
+                                                      iid,
+                                                    );
+                                                    if (context.mounted) {
+                                                      await LottieFeedback.showSuccess(
+                                                        context,
+                                                        message:
+                                                            'Eliminado de favoritos',
+                                                        duration:
+                                                            const Duration(
+                                                              milliseconds:
+                                                                  1000,
+                                                            ),
+                                                      );
+                                                    }
+                                                  } else {
+                                                    await BaseDatos.agregarFavorito(
+                                                      uid,
+                                                      iid,
+                                                    );
+                                                    if (context.mounted) {
+                                                      await LottieFeedback.showSuccess(
+                                                        context,
+                                                        message:
+                                                            'Agregado a favoritos',
+                                                        duration:
+                                                            const Duration(
+                                                              milliseconds:
+                                                                  1000,
+                                                            ),
+                                                      );
+                                                    }
+                                                  }
+                                                  setState(() {});
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -271,6 +309,25 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text(
+                                      titulo.toString(),
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: MiTema.azul,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      categoria.toString(),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: MiTema.celeste,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
                                     Text(
                                       '\$${precio.toString()}/mes',
                                       style: TextStyle(
@@ -287,7 +344,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                           size: 16,
                                         ),
                                         const SizedBox(width: 4),
-                                        Text('$recamaras camas'),
+                                        Text('$camas camas'),
                                         const SizedBox(width: 12),
                                         const Icon(
                                           Icons.bathtub_outlined,
@@ -298,7 +355,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                         const SizedBox(width: 12),
                                         const Icon(Icons.square_foot, size: 16),
                                         const SizedBox(width: 4),
-                                        Text('$metros m²'),
+                                        Text('$tamano m²'),
                                       ],
                                     ),
                                     const SizedBox(height: 6),
@@ -329,7 +386,8 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                                               builder: (context) =>
                                                   DetalleInmuebleScreen(
                                                     inmueble: i,
-                                                    usuarioId: widget.usuarioId,
+                                                    usuarioId:
+                                                        SesionActual.usuarioId,
                                                   ),
                                             ),
                                           );

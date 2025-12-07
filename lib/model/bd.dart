@@ -1,524 +1,351 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class BaseDatos {
-  static Database? _db;
+  static final _supabase = Supabase.instance.client;
 
-  static Future<Database> conecta() async {
-    if (_db != null) return _db!;
+  // ================== USUARIOS ==================
 
-    final databasesPath = await getDatabasesPath();
-    final path = p.join(databasesPath, 'arrendaoco.db');
-
-    _db = await openDatabase(
-      path,
-      version: 6, // IMPORTANTE: versión 6 para agregar notificaciones
-      onCreate: (Database db, int version) async {
-        // ======== Tabla usuarios ========
-        await db.execute('''
-          CREATE TABLE usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            nombre TEXT,
-            password TEXT,
-            rol TEXT
-          )
-        ''');
-
-        await db.insert('usuarios', {
-          'username': 'admin',
-          'nombre': 'Administrador',
-          'password': '123',
-          'rol': 'Arrendador',
-        });
-
-        // ======== Tabla inmuebles ========
-        await db.execute('''
-          CREATE TABLE inmuebles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            titulo TEXT,
-            descripcion TEXT,
-            precio REAL,
-            disponible INTEGER,
-            categoria TEXT CHECK(
-              categoria IN ('Casa', 'Departamento', 'Cuarto')
-            ),
-            propietario_id INTEGER,
-            latitud REAL,
-            longitud REAL,
-            rutas_imagen TEXT,
-            camas INTEGER,
-            banos INTEGER,
-            tamano TEXT,
-            estacionamiento INTEGER,
-            mascotas INTEGER,
-            visitas INTEGER,
-            amueblado INTEGER,
-            agua INTEGER,
-            wifi INTEGER,
-            FOREIGN KEY (propietario_id) REFERENCES usuarios(id)
-          )
-        ''');
-
-        // ======== Tabla reseñas ========
-        await db.execute('''
-          CREATE TABLE resenas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            inmueble_id INTEGER NOT NULL,
-            usuario_nombre TEXT,
-            rating INTEGER NOT NULL,
-            comentario TEXT,
-            fecha TEXT,
-            FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id)
-          )
-        ''');
-
-        // ======== Tabla favoritos ========
-        await db.execute('''
-          CREATE TABLE favoritos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            inmueble_id INTEGER NOT NULL,
-            fecha_agregado TEXT,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-            FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id),
-            UNIQUE(usuario_id, inmueble_id)
-          )
-        ''');
-
-        // ======== Tabla calendario ========
-        await db.execute('''
-          CREATE TABLE calendario (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            inmueble_id INTEGER,
-            renta_id INTEGER,
-            titulo TEXT NOT NULL,
-            descripcion TEXT,
-            fecha TEXT NOT NULL,
-            tipo TEXT CHECK(tipo IN ('visita', 'accion', 'recordatorio', 'pago')),
-            compartido INTEGER DEFAULT 0,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-            FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id),
-            FOREIGN KEY (renta_id) REFERENCES rentas(id)
-          )
-        ''');
-
-        // ======== Tabla rentas ========
-        await db.execute('''
-          CREATE TABLE rentas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            inmueble_id INTEGER NOT NULL,
-            arrendador_id INTEGER NOT NULL,
-            inquilino_id INTEGER NOT NULL,
-            fecha_inicio TEXT NOT NULL,
-            fecha_fin TEXT,
-            monto_mensual REAL NOT NULL,
-            dia_pago INTEGER NOT NULL,
-            estado TEXT CHECK(estado IN ('activa', 'finalizada', 'pendiente')) DEFAULT 'activa',
-            FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id),
-            FOREIGN KEY (arrendador_id) REFERENCES usuarios(id),
-            FOREIGN KEY (inquilino_id) REFERENCES usuarios(id)
-          )
-        ''');
-
-        // ======== Tabla pagos_renta ========
-        await db.execute('''
-          CREATE TABLE pagos_renta (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            renta_id INTEGER NOT NULL,
-            mes TEXT NOT NULL,
-            anio INTEGER NOT NULL,
-            monto REAL NOT NULL,
-            fecha_vencimiento TEXT NOT NULL,
-            fecha_pago TEXT,
-            estado TEXT CHECK(estado IN ('pendiente', 'pagado', 'atrasado')) DEFAULT 'pendiente',
-            FOREIGN KEY (renta_id) REFERENCES rentas(id)
-          )
-        ''');
-
-        // ======== Tabla notificaciones ========
-        await db.execute('''
-          CREATE TABLE notificaciones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            titulo TEXT NOT NULL,
-            mensaje TEXT NOT NULL,
-            tipo TEXT CHECK(tipo IN ('renta', 'pago', 'inmueble', 'sistema')),
-            leida INTEGER DEFAULT 0,
-            fecha TEXT NOT NULL,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-          )
-        ''');
-      },
-      onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS resenas (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              inmueble_id INTEGER NOT NULL,
-              usuario_nombre TEXT,
-              rating INTEGER NOT NULL,
-              comentario TEXT,
-              fecha TEXT,
-              FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id)
-            )
-          ''');
-        }
-        if (oldVersion < 3) {
-          // Agregar columna 'rol' a la tabla usuarios
-          await db.execute('''
-            ALTER TABLE usuarios ADD COLUMN rol TEXT
-          ''');
-        }
-        if (oldVersion < 4) {
-          // Agregar tabla favoritos
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS favoritos (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              usuario_id INTEGER NOT NULL,
-              inmueble_id INTEGER NOT NULL,
-              fecha_agregado TEXT,
-              FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-              FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id),
-              UNIQUE(usuario_id, inmueble_id)
-            )
-          ''');
-
-          // Agregar tabla calendario
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS calendario (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              usuario_id INTEGER NOT NULL,
-              inmueble_id INTEGER,
-              titulo TEXT NOT NULL,
-              descripcion TEXT,
-              fecha TEXT NOT NULL,
-              tipo TEXT CHECK(tipo IN ('visita', 'accion', 'recordatorio')),
-              FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-              FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id)
-            )
-          ''');
-        }
-        if (oldVersion < 5) {
-          // Agregar columnas a calendario para soporte de rentas
-          await db.execute('''
-            ALTER TABLE calendario ADD COLUMN renta_id INTEGER
-          ''');
-          await db.execute('''
-            ALTER TABLE calendario ADD COLUMN compartido INTEGER DEFAULT 0
-          ''');
-
-          // Crear tabla rentas
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS rentas (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              inmueble_id INTEGER NOT NULL,
-              arrendador_id INTEGER NOT NULL,
-              inquilino_id INTEGER NOT NULL,
-              fecha_inicio TEXT NOT NULL,
-              fecha_fin TEXT,
-              monto_mensual REAL NOT NULL,
-              dia_pago INTEGER NOT NULL,
-              estado TEXT CHECK(estado IN ('activa', 'finalizada', 'pendiente')) DEFAULT 'activa',
-              FOREIGN KEY (inmueble_id) REFERENCES inmuebles(id),
-              FOREIGN KEY (arrendador_id) REFERENCES usuarios(id),
-              FOREIGN KEY (inquilino_id) REFERENCES usuarios(id)
-            )
-          ''');
-
-          // Crear tabla pagos_renta
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS pagos_renta (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              renta_id INTEGER NOT NULL,
-              mes TEXT NOT NULL,
-              anio INTEGER NOT NULL,
-              monto REAL NOT NULL,
-              fecha_vencimiento TEXT NOT NULL,
-              fecha_pago TEXT,
-              estado TEXT CHECK(estado IN ('pendiente', 'pagado', 'atrasado')) DEFAULT 'pendiente',
-              FOREIGN KEY (renta_id) REFERENCES rentas(id)
-            )
-          ''');
-        }
-        if (oldVersion < 6) {
-          // Crear tabla notificaciones
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS notificaciones (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              usuario_id INTEGER NOT NULL,
-              titulo TEXT NOT NULL,
-              mensaje TEXT NOT NULL,
-              tipo TEXT CHECK(tipo IN ('renta', 'pago', 'inmueble', 'sistema')),
-              leida INTEGER DEFAULT 0,
-              fecha TEXT NOT NULL,
-              FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-            )
-          ''');
-        }
-      },
-    );
-
-    return _db!;
+  static Future<Map<String, dynamic>?> obtenerUsuario(int id) async {
+    final response = await _supabase
+        .from('usuarios')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    return response;
   }
 
-  // ================== INMUEBLES (opcionales) ==================
+  static Future<void> actualizarUsuario(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    await _supabase.from('usuarios').update(data).eq('id', id);
+  }
+
+  // ================== INMUEBLES ==================
 
   static Future<int> insertarInmueble(Map<String, dynamic> data) async {
-    final db = await conecta();
-    return db.insert('inmuebles', data);
+    final response = await _supabase
+        .from('inmuebles')
+        .insert(data)
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerInmuebles() async {
-    final db = await conecta();
-    return db.query('inmuebles', orderBy: 'id DESC');
+    final response = await _supabase
+        .from('inmuebles')
+        .select()
+        .order('id', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Future<List<Map<String, dynamic>>> obtenerInmueblesPorPropietario(
+    int propietarioId,
+  ) async {
+    final response = await _supabase
+        .from('inmuebles')
+        .select()
+        .eq('propietario_id', propietarioId)
+        .order('id', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Future<int> actualizarInmueble(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    // Supabase update no devuelve 'rows affected' como int directamente de la misma forma que sqflite
+    // Pero si no falla, asumimos éxito. Retornamos ID por convención.
+    await _supabase.from('inmuebles').update(data).eq('id', id);
+    return id;
+  }
+
+  static Future<int> eliminarInmueble(int id) async {
+    await _supabase.from('inmuebles').delete().eq('id', id);
+    return id; // Retornamos ID eliminado
   }
 
   // ================== RESEÑAS ==================
 
   static Future<int> insertarResena(Map<String, dynamic> resena) async {
-    final db = await conecta();
-    return db.insert('resenas', resena);
+    // En Supabase 'rating' es integer, asegurarse que se envíe bien
+    final response = await _supabase
+        .from('resenas')
+        .insert(resena)
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerResenasPorInmueble(
     int inmuebleId,
   ) async {
-    final db = await conecta();
-    return db.query(
-      'resenas',
-      where: 'inmueble_id = ?',
-      whereArgs: [inmuebleId],
-      orderBy: 'id DESC',
-    );
+    final response = await _supabase
+        .from('resenas')
+        .select()
+        .eq('inmueble_id', inmuebleId)
+        .order('id', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   static Future<Map<String, dynamic>> obtenerResumenResenas(
     int inmuebleId,
   ) async {
-    final db = await conecta();
-    final result = await db.rawQuery(
-      '''
-      SELECT 
-        AVG(rating) AS promedio,
-        COUNT(*) AS total
-      FROM resenas
-      WHERE inmueble_id = ?
-    ''',
-      [inmuebleId],
-    );
+    // Supabase no tiene agregation queries directas simples en el cliente Dart sin usar RPC.
+    // Lo haremos en cliente por ahora (no es ideal para millones de filas, pero ok por ahora)
+    final response = await _supabase
+        .from('resenas')
+        .select('rating')
+        .eq('inmueble_id', inmuebleId);
 
-    if (result.isNotEmpty) {
-      final row = result.first;
-      final promedioRaw = row['promedio'];
-      final totalRaw = row['total'];
+    final list = List<Map<String, dynamic>>.from(response);
+    if (list.isEmpty) return {'promedio': 0.0, 'total': 0};
 
-      final promedio = promedioRaw == null
-          ? 0.0
-          : (promedioRaw is int)
-          ? promedioRaw.toDouble()
-          : promedioRaw as double;
+    final total = list.length;
+    final sum = list.fold<num>(0, (prev, e) => prev + (e['rating'] as num));
+    final promedio = sum / total;
 
-      final total = totalRaw == null
-          ? 0
-          : (totalRaw is int)
-          ? totalRaw
-          : (totalRaw as num).toInt();
-
-      return {'promedio': promedio, 'total': total};
-    }
-    return {'promedio': 0.0, 'total': 0};
+    return {'promedio': promedio.toDouble(), 'total': total};
   }
 
   // ================== FAVORITOS ==================
 
   static Future<int> agregarFavorito(int usuarioId, int inmuebleId) async {
-    final db = await conecta();
-    return db.insert('favoritos', {
-      'usuario_id': usuarioId,
-      'inmueble_id': inmuebleId,
-      'fecha_agregado': DateTime.now().toIso8601String(),
-    });
+    final response = await _supabase
+        .from('favoritos')
+        .insert({
+          'usuario_id': usuarioId,
+          'inmueble_id': inmuebleId,
+          'fecha_agregado': DateTime.now().toIso8601String(),
+        })
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<int> eliminarFavorito(int usuarioId, int inmuebleId) async {
-    final db = await conecta();
-    return db.delete(
-      'favoritos',
-      where: 'usuario_id = ? AND inmueble_id = ?',
-      whereArgs: [usuarioId, inmuebleId],
-    );
+    await _supabase.from('favoritos').delete().match({
+      'usuario_id': usuarioId,
+      'inmueble_id': inmuebleId,
+    });
+    return 1;
   }
 
   static Future<bool> esFavorito(int usuarioId, int inmuebleId) async {
-    final db = await conecta();
-    final result = await db.query(
-      'favoritos',
-      where: 'usuario_id = ? AND inmueble_id = ?',
-      whereArgs: [usuarioId, inmuebleId],
-    );
-    return result.isNotEmpty;
+    final response = await _supabase.from('favoritos').select().match({
+      'usuario_id': usuarioId,
+      'inmueble_id': inmuebleId,
+    });
+    return (response as List).isNotEmpty;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerFavoritos(
     int usuarioId,
   ) async {
-    final db = await conecta();
-    return db.rawQuery(
-      '''
-      SELECT i.* FROM inmuebles i
-      INNER JOIN favoritos f ON i.id = f.inmueble_id
-      WHERE f.usuario_id = ?
-      ORDER BY f.fecha_agregado DESC
-    ''',
-      [usuarioId],
-    );
+    // Join manual: Obtener favoritos y luego inmuebles, o usar select relacional
+    // Usaremos select relacional: inmuebles!inner(...)
+    // Ojo: La tabla favoritos tiene inmueble_id.
+    // Query: Select all favorites for user, expand inmueble data.
+
+    final response = await _supabase
+        .from('favoritos')
+        .select('*, inmuebles(*)')
+        .eq('usuario_id', usuarioId)
+        .order('fecha_agregado', ascending: false);
+
+    // Mapear resultado para que parezca una lista de inmuebles plana, como espera la UI
+    final List<Map<String, dynamic>> resultados = [];
+    for (var item in response) {
+      if (item['inmuebles'] != null) {
+        resultados.add(item['inmuebles'] as Map<String, dynamic>);
+      }
+    }
+    return resultados;
   }
 
   // ================== CALENDARIO ==================
 
   static Future<int> agregarEvento(Map<String, dynamic> evento) async {
-    final db = await conecta();
-    return db.insert('calendario', evento);
+    final response = await _supabase
+        .from('calendario')
+        .insert(evento)
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerEventosPorUsuario(
     int usuarioId,
   ) async {
-    final db = await conecta();
-    return db.query(
-      'calendario',
-      where: 'usuario_id = ?',
-      whereArgs: [usuarioId],
-      orderBy: 'fecha ASC',
-    );
+    final response = await _supabase
+        .from('calendario')
+        .select()
+        .eq('usuario_id', usuarioId)
+        .order('fecha', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   static Future<int> eliminarEvento(int eventoId) async {
-    final db = await conecta();
-    return db.delete('calendario', where: 'id = ?', whereArgs: [eventoId]);
+    await _supabase.from('calendario').delete().eq('id', eventoId);
+    return eventoId;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerEventosPorRenta(
     int rentaId,
   ) async {
-    final db = await conecta();
-    return db.query(
-      'calendario',
-      where: 'renta_id = ? AND compartido = 1',
-      whereArgs: [rentaId],
-      orderBy: 'fecha ASC',
-    );
+    final response = await _supabase
+        .from('calendario')
+        .select()
+        .eq('renta_id', rentaId)
+        .eq('compartido', 1)
+        .order('fecha', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // ================== RENTAS ==================
 
   static Future<int> crearRenta(Map<String, dynamic> renta) async {
-    final db = await conecta();
-    return db.insert('rentas', renta);
+    final response = await _supabase
+        .from('rentas')
+        .insert(renta)
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerRentasPorArrendador(
     int arrendadorId,
   ) async {
-    final db = await conecta();
-    return db.rawQuery(
-      '''
-      SELECT r.*, i.titulo as inmueble_titulo, i.rutas_imagen, u.nombre as inquilino_nombre
-      FROM rentas r
-      INNER JOIN inmuebles i ON r.inmueble_id = i.id
-      INNER JOIN usuarios u ON r.inquilino_id = u.id
-      WHERE r.arrendador_id = ?
-      ORDER BY r.fecha_inicio DESC
-    ''',
-      [arrendadorId],
+    // Necesitamos datos de inquilino e inmueble
+    // Relaciones: rentas -> inmuebles, rentas -> usuarios (inquilino_id)
+    // Ojo: inquilino_id es FK a usuarios. Supabase detecta FKs. as 'inquilino' si configuramos el nombre o usamos la tabla directamente.
+    // Como tenemos multiples FK a usuarios (arrendador, inquilino), necesitamos especificar cual.
+    // Sintaxis: usuarios!inquilino_id(...)
+
+    final response = await _supabase
+        .from('rentas')
+        .select('*, inmuebles(*), inquilino:usuarios!inquilino_id(*)')
+        .eq('arrendador_id', arrendadorId)
+        .order('fecha_inicio', ascending: false);
+
+    // Aplanar para compatibilidad
+    return List<Map<String, dynamic>>.from(
+      response.map((r) {
+        final inmueble = r['inmuebles'] as Map<String, dynamic>;
+        final inquilino = r['inquilino'] as Map<String, dynamic>;
+
+        final newMap = Map<String, dynamic>.from(r);
+        newMap['inmueble_titulo'] = inmueble['titulo'];
+        newMap['rutas_imagen'] = inmueble['rutas_imagen'];
+        newMap['inquilino_nombre'] = inquilino['nombre'];
+
+        // Limpiar objetos anidados si queremos o dejarlos
+        return newMap;
+      }),
     );
   }
 
   static Future<List<Map<String, dynamic>>> obtenerRentasPorInquilino(
     int inquilinoId,
   ) async {
-    final db = await conecta();
-    return db.rawQuery(
-      '''
-      SELECT r.*, i.titulo as inmueble_titulo, i.rutas_imagen, u.nombre as arrendador_nombre
-      FROM rentas r
-      INNER JOIN inmuebles i ON r.inmueble_id = i.id
-      INNER JOIN usuarios u ON r.arrendador_id = u.id
-      WHERE r.inquilino_id = ?
-      ORDER BY r.fecha_inicio DESC
-    ''',
-      [inquilinoId],
+    final response = await _supabase
+        .from('rentas')
+        .select('*, inmuebles(*), arrendador:usuarios!arrendador_id(*)')
+        .eq('inquilino_id', inquilinoId)
+        .order('fecha_inicio', ascending: false);
+
+    return List<Map<String, dynamic>>.from(
+      response.map((r) {
+        final inmueble = r['inmuebles'] as Map<String, dynamic>;
+        final arrendador = r['arrendador'] as Map<String, dynamic>;
+
+        final newMap = Map<String, dynamic>.from(r);
+        newMap['inmueble_titulo'] = inmueble['titulo'];
+        newMap['rutas_imagen'] = inmueble['rutas_imagen'];
+        newMap['arrendador_nombre'] = arrendador['nombre'];
+        return newMap;
+      }),
     );
   }
 
   static Future<Map<String, dynamic>?> obtenerRentaPorId(int rentaId) async {
-    final db = await conecta();
-    final result = await db.rawQuery(
-      '''
-      SELECT r.*, i.titulo as inmueble_titulo, i.rutas_imagen,
-             u1.nombre as inquilino_nombre, u1.id as inquilino_id,
-             u2.nombre as arrendador_nombre, u2.id as arrendador_id
-      FROM rentas r
-      INNER JOIN inmuebles i ON r.inmueble_id = i.id
-      INNER JOIN usuarios u1 ON r.inquilino_id = u1.id
-      INNER JOIN usuarios u2 ON r.arrendador_id = u2.id
-      WHERE r.id = ?
-    ''',
-      [rentaId],
-    );
+    final response = await _supabase
+        .from('rentas')
+        .select(
+          '*, inmuebles(*), inquilino:usuarios!inquilino_id(*), arrendador:usuarios!arrendador_id(*)',
+        )
+        .eq('id', rentaId)
+        .maybeSingle();
 
-    return result.isNotEmpty ? result.first : null;
+    if (response == null) return null;
+
+    final inmueble = response['inmuebles'] as Map<String, dynamic>;
+    final inquilino = response['inquilino'] as Map<String, dynamic>;
+    final arrendador = response['arrendador'] as Map<String, dynamic>;
+
+    final newMap = Map<String, dynamic>.from(response);
+    newMap['inmueble_titulo'] = inmueble['titulo'];
+    newMap['rutas_imagen'] = inmueble['rutas_imagen'];
+    newMap['inquilino_nombre'] = inquilino['nombre'];
+    newMap['inquilino_id'] = inquilino['id'];
+    newMap['arrendador_nombre'] = arrendador['nombre'];
+    newMap['arrendador_id'] = arrendador['id'];
+
+    return newMap;
   }
 
   static Future<bool> verificarInquilinoExiste(int inquilinoId) async {
-    final db = await conecta();
-    final result = await db.query(
-      'usuarios',
-      where: 'id = ? AND rol = ?',
-      whereArgs: [inquilinoId, 'Inquilino'],
-    );
-    return result.isNotEmpty;
+    final response = await _supabase
+        .from('usuarios')
+        .select()
+        .eq('id', inquilinoId)
+        .eq('rol', 'Inquilino')
+        .maybeSingle();
+    return response != null;
   }
 
   static Future<bool> inmuebleTieneRentaActiva(int inmuebleId) async {
-    final db = await conecta();
-    final result = await db.query(
-      'rentas',
-      where: 'inmueble_id = ? AND estado = ?',
-      whereArgs: [inmuebleId, 'activa'],
-    );
-    return result.isNotEmpty;
+    final response = await _supabase
+        .from('rentas')
+        .select()
+        .eq('inmueble_id', inmuebleId)
+        .eq('estado', 'activa')
+        .maybeSingle();
+    return response != null;
   }
 
   static Future<int> actualizarEstadoRenta(int rentaId, String estado) async {
-    final db = await conecta();
-    return db.update(
-      'rentas',
-      {'estado': estado},
-      where: 'id = ?',
-      whereArgs: [rentaId],
-    );
+    await _supabase.from('rentas').update({'estado': estado}).eq('id', rentaId);
+    return rentaId;
   }
 
   // ================== PAGOS DE RENTA ==================
 
   static Future<int> registrarPago(Map<String, dynamic> pago) async {
-    final db = await conecta();
-    return db.insert('pagos_renta', pago);
+    final response = await _supabase
+        .from('pagos_renta')
+        .insert(pago)
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerPagosPorRenta(
     int rentaId,
   ) async {
-    final db = await conecta();
-    return db.query(
-      'pagos_renta',
-      where: 'renta_id = ?',
-      whereArgs: [rentaId],
-      orderBy: 'anio ASC, mes ASC',
-    );
+    final response = await _supabase
+        .from('pagos_renta')
+        .select()
+        .eq('renta_id', rentaId)
+        .order('anio', ascending: true)
+        .order(
+          'mes',
+          ascending: true,
+        ); // Mes es texto... esto podría ordenar alfabéticamente mal si no usamos nº. Pero seguimos lógica previa.
+    // Lo ideal sería tener un campo mes_numero, pero seguimos backward compat.
+
+    return List<Map<String, dynamic>>.from(response);
   }
 
   static Future<int> actualizarEstadoPago(
@@ -526,25 +353,25 @@ class BaseDatos {
     String estado,
     String? fechaPago,
   ) async {
-    final db = await conecta();
-    return db.update(
-      'pagos_renta',
-      {'estado': estado, if (fechaPago != null) 'fecha_pago': fechaPago},
-      where: 'id = ?',
-      whereArgs: [pagoId],
-    );
+    final data = {'estado': estado};
+    if (fechaPago != null) {
+      data['fecha_pago'] = fechaPago;
+    }
+    await _supabase.from('pagos_renta').update(data).eq('id', pagoId);
+    return pagoId;
   }
 
   static Future<Map<String, dynamic>?> obtenerProximoPago(int rentaId) async {
-    final db = await conecta();
-    final result = await db.query(
-      'pagos_renta',
-      where: 'renta_id = ? AND estado = ?',
-      whereArgs: [rentaId, 'pendiente'],
-      orderBy: 'fecha_vencimiento ASC',
-      limit: 1,
-    );
-    return result.isNotEmpty ? result.first : null;
+    // orderBy fecha_vencimiento
+    final response = await _supabase
+        .from('pagos_renta')
+        .select()
+        .eq('renta_id', rentaId)
+        .eq('estado', 'pendiente')
+        .order('fecha_vencimiento', ascending: true)
+        .limit(1)
+        .maybeSingle();
+    return response;
   }
 
   static Future<void> generarPagosMensuales(
@@ -554,15 +381,14 @@ class BaseDatos {
     int diaPago,
     int meses,
   ) async {
-    final db = await conecta();
+    final List<Map<String, dynamic>> pagos = [];
 
     for (int i = 0; i < meses; i++) {
       final fecha = DateTime(fechaInicio.year, fechaInicio.month + i, diaPago);
-
       final mes = _getNombreMes(fecha.month);
       final anio = fecha.year;
 
-      await db.insert('pagos_renta', {
+      pagos.add({
         'renta_id': rentaId,
         'mes': mes,
         'anio': anio,
@@ -571,6 +397,9 @@ class BaseDatos {
         'estado': 'pendiente',
       });
     }
+
+    // Batch insert
+    await _supabase.from('pagos_renta').insert(pagos);
   }
 
   static String _getNombreMes(int mes) {
@@ -599,68 +428,59 @@ class BaseDatos {
     required String mensaje,
     String tipo = 'sistema',
   }) async {
-    final db = await conecta();
-    return db.insert('notificaciones', {
-      'usuario_id': usuarioId,
-      'titulo': titulo,
-      'mensaje': mensaje,
-      'tipo': tipo,
-      'leida': 0,
-      'fecha': DateTime.now().toIso8601String(),
-    });
+    final response = await _supabase
+        .from('notificaciones')
+        .insert({
+          'usuario_id': usuarioId,
+          'titulo': titulo,
+          'mensaje': mensaje,
+          'tipo': tipo,
+          'leida': 0,
+          'fecha': DateTime.now().toIso8601String(),
+        })
+        .select('id')
+        .single();
+    return response['id'] as int;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerNotificaciones(
     int usuarioId,
   ) async {
-    final db = await conecta();
-    return db.query(
-      'notificaciones',
-      where: 'usuario_id = ?',
-      whereArgs: [usuarioId],
-      orderBy: 'fecha DESC',
-    );
+    final response = await _supabase
+        .from('notificaciones')
+        .select()
+        .eq('usuario_id', usuarioId)
+        .order('fecha', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   static Future<int> marcarComoLeida(int notificacionId) async {
-    final db = await conecta();
-    return db.update(
-      'notificaciones',
-      {'leida': 1},
-      where: 'id = ?',
-      whereArgs: [notificacionId],
-    );
+    await _supabase
+        .from('notificaciones')
+        .update({'leida': 1})
+        .eq('id', notificacionId);
+    return notificacionId;
   }
 
   static Future<int> contarNoLeidas(int usuarioId) async {
-    final db = await conecta();
-    final result = await db.rawQuery(
-      '''
-      SELECT COUNT(*) as total
-      FROM notificaciones
-      WHERE usuario_id = ? AND leida = 0
-    ''',
-      [usuarioId],
-    );
-    return (result.first['total'] as int?) ?? 0;
+    final count = await _supabase
+        .from('notificaciones')
+        .count(CountOption.exact)
+        .eq('usuario_id', usuarioId)
+        .eq('leida', 0);
+    return count;
   }
 
   static Future<int> eliminarNotificacion(int notificacionId) async {
-    final db = await conecta();
-    return db.delete(
-      'notificaciones',
-      where: 'id = ?',
-      whereArgs: [notificacionId],
-    );
+    await _supabase.from('notificaciones').delete().eq('id', notificacionId);
+    return notificacionId;
   }
 
   static Future<int> marcarTodasComoLeidas(int usuarioId) async {
-    final db = await conecta();
-    return db.update(
-      'notificaciones',
-      {'leida': 1},
-      where: 'usuario_id = ?',
-      whereArgs: [usuarioId],
-    );
+    await _supabase
+        .from('notificaciones')
+        .update({'leida': 1})
+        .eq('usuario_id', usuarioId);
+    return 1;
   }
 }

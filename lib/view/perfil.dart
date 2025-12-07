@@ -8,11 +8,21 @@ import 'package:arrendaoco/view/calendario_inquilino.dart';
 import 'package:arrendaoco/view/calendario_arrendador.dart';
 import 'package:arrendaoco/view/gestionar_rentas.dart';
 import 'package:arrendaoco/view/mis_rentas.dart';
+import 'package:arrendaoco/view/editar_perfil.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
-import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/services/fcm_service.dart';
+import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/widgets/lottie_feedback.dart';
 
-class PerfilScreen extends StatelessWidget {
+class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
+
+  @override
+  State<PerfilScreen> createState() => _PerfilScreenState();
+}
+
+class _PerfilScreenState extends State<PerfilScreen> {
+  bool _notificacionesActivas = true;
 
   Future<void> _cerrarSesion(BuildContext context) async {
     final confirmar = await showDialog<bool>(
@@ -36,9 +46,13 @@ class PerfilScreen extends StatelessWidget {
     );
 
     if (confirmar == true && context.mounted) {
-      // Limpiar sesión
+      // Limpiar sesión local
       SesionActual.usuarioId = null;
-      SesionActual.nombre = null;
+      SesionActual.nombre = '';
+      SesionActual.email = '';
+      SesionActual.rol = '';
+
+      FCMService.dispose();
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -48,10 +62,17 @@ class PerfilScreen extends StatelessWidget {
     }
   }
 
+  void _recargarPerfil() {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final nombre = SesionActual.nombre ?? 'Usuario';
-    final username = nombre; // puedes separar nombre/username si quieres
+    // Usamos datos de sesion_actual, que se actualizan al editar perfil
+    final nombre = SesionActual.nombre.isEmpty
+        ? 'Usuario'
+        : SesionActual.nombre;
+    const username = ''; // Opcional
 
     return Container(
       color: Colors.white,
@@ -70,6 +91,7 @@ class PerfilScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  // Avatar (intentamos cargar de red si hay URL en un futuro, por ahora static o local)
                   CircleAvatar(
                     radius: 50,
                     backgroundColor: MiTema.crema,
@@ -84,14 +106,14 @@ class PerfilScreen extends StatelessWidget {
                       color: MiTema.crema,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    username,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: MiTema.crema.withOpacity(0.9),
+                  if (username.isNotEmpty)
+                    Text(
+                      username,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: MiTema.crema.withOpacity(0.9),
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -109,7 +131,7 @@ class PerfilScreen extends StatelessWidget {
                         Icon(Icons.badge, size: 16, color: MiTema.crema),
                         const SizedBox(width: 6),
                         Text(
-                          'ID: ${SesionActual.usuarioId ?? "N/A"}',
+                          'ID: ${SesionActual.publicId ?? SesionActual.usuarioId ?? "N/A"}',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -163,69 +185,73 @@ class PerfilScreen extends StatelessWidget {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Sección: Mis publicaciones
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Mis publicaciones',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: MiTema.azul,
+          // Sección: Mis publicaciones (Solo si es Arrendador o Mixto)
+          if (SesionActual.rol == 'Arrendador' ||
+              SesionActual.rol == 'Administrador')
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mis publicaciones',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      // Publicar
-                      Expanded(
-                        child: _QuickActionButton(
-                          icon: Icons.add_home_work_outlined,
-                          label: 'Publicar',
-                          bgColor: MiTema.celeste,
-                          onTap: () {
-                            final propietarioId = SesionActual.usuarioId ?? 1;
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => RegistrarInmuebleScreen(
-                                  propietarioId: propietarioId,
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // Publicar
+                        Expanded(
+                          child: _QuickActionButton(
+                            icon: Icons.add_home_work_outlined,
+                            label: 'Publicar',
+                            bgColor: MiTema.celeste,
+                            onTap: () {
+                              final propietarioId =
+                                  SesionActual.usuarioId ?? '';
+                              if (propietarioId.isEmpty) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RegistrarInmuebleScreen(
+                                    propietarioId: propietarioId,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Ver todas
-                      Expanded(
-                        child: _QuickActionButton(
-                          icon: Icons.list_outlined,
-                          label: 'Ver todas',
-                          bgColor: MiTema.vino,
-                          onTap: () {
-                            final usuarioId = SesionActual.usuarioId ?? 1;
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    ArrendadorScreen(usuarioId: usuarioId),
-                              ),
-                            );
-                          },
+                        const SizedBox(width: 10),
+                        // Ver todas
+                        Expanded(
+                          child: _QuickActionButton(
+                            icon: Icons.list_outlined,
+                            label: 'Ver todas',
+                            bgColor: MiTema.vino,
+                            onTap: () {
+                              final usuarioId = SesionActual.usuarioId ?? '';
+                              if (usuarioId.isEmpty) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ArrendadorScreen(usuarioId: usuarioId),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Sección: Cuenta
           SliverToBoxAdapter(
@@ -236,93 +262,61 @@ class PerfilScreen extends StatelessWidget {
                 _SettingsTile(
                   icon: Icons.person_outline,
                   title: 'Editar perfil',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Pantalla de editar perfil (pendiente)'),
+                  onTap: () async {
+                    final cambio = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EditarPerfilScreen(),
                       ),
                     );
+                    if (cambio == true) {
+                      _recargarPerfil();
+                    }
                   },
                 ),
                 _SettingsTile(
                   icon: Icons.home_work,
                   title: 'Mis Rentas',
-                  onTap: () async {
-                    final usuarioId = SesionActual.usuarioId;
-                    if (usuarioId == null) return;
-
-                    final db = await BaseDatos.conecta();
-                    final usuario = await db.query(
-                      'usuarios',
-                      where: 'id = ?',
-                      whereArgs: [usuarioId],
-                      limit: 1,
-                    );
-
-                    if (usuario.isNotEmpty) {
-                      final rol = (usuario.first['rol'] ?? 'Inquilino')
-                          .toString();
-
-                      if (context.mounted) {
-                        if (rol == 'Arrendador') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const GestionarRentasScreen(),
-                            ),
-                          );
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const MisRentasScreen(),
-                            ),
-                          );
-                        }
-                      }
+                  onTap: () {
+                    final rol = SesionActual.rol;
+                    if (rol == 'Arrendador') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GestionarRentasScreen(),
+                        ),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MisRentasScreen(),
+                        ),
+                      );
                     }
                   },
                 ),
                 _SettingsTile(
                   icon: Icons.calendar_today,
                   title: 'Calendario',
-                  onTap: () async {
-                    // Obtener el rol del usuario
-                    final usuarioId = SesionActual.usuarioId;
-                    if (usuarioId == null) return;
-
-                    final db = await BaseDatos.conecta();
-                    final usuario = await db.query(
-                      'usuarios',
-                      where: 'id = ?',
-                      whereArgs: [usuarioId],
-                      limit: 1,
-                    );
-
-                    if (usuario.isNotEmpty) {
-                      final rol = (usuario.first['rol'] ?? 'Inquilino')
-                          .toString();
-
-                      if (context.mounted) {
-                        if (rol == 'Arrendador') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const CalendarioArrendadorScreen(),
-                            ),
-                          );
-                        } else {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const CalendarioInquilinoScreen(),
-                            ),
-                          );
-                        }
-                      }
+                  onTap: () {
+                    final rol = SesionActual.rol;
+                    if (rol == 'Arrendador') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const CalendarioArrendadorScreen(),
+                        ),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const CalendarioInquilinoScreen(),
+                        ),
+                      );
                     }
                   },
                   showDivider: false,
@@ -342,15 +336,36 @@ class PerfilScreen extends StatelessWidget {
                   icon: Icons.notifications_outlined,
                   title: 'Notificaciones',
                   trailing: Switch(
-                    value: true,
-                    onChanged: (_) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Configuración de notificaciones pendiente',
+                    value: _notificacionesActivas,
+                    onChanged: (val) async {
+                      setState(() {
+                        _notificacionesActivas = val;
+                      });
+                      if (val) {
+                        try {
+                          // Feedback vistoso
+                          await LottieFeedback.showSuccess(
+                            context,
+                            message: 'Notificaciones Activadas',
+                            duration: const Duration(milliseconds: 1400),
+                          );
+                          // Notificación local de prueba
+                          await NotificacionesService.mostrarNotificacion(
+                            titulo: '🔔 Notificaciones Activas',
+                            cuerpo:
+                                'Te mantendremos al tanto de tus rentas y novedades.',
+                          );
+                        } catch (e) {
+                          print('Error al mostrar notificación: $e');
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Notificaciones desactivadas'),
+                            duration: Duration(milliseconds: 1000),
                           ),
-                        ),
-                      );
+                        );
+                      }
                     },
                     activeThumbColor: MiTema.celeste,
                   ),
