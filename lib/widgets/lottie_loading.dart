@@ -33,13 +33,16 @@ class LottieLoading extends StatelessWidget {
       children: [
         animation,
         if (message != null) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             message!,
             style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
+              decoration: TextDecoration
+                  .none, // Evita subrayado amarillo si no hay Scaffold
+              fontFamily: 'Inter', // Si usas esa fuente
             ),
             textAlign: TextAlign.center,
           ),
@@ -49,8 +52,25 @@ class LottieLoading extends StatelessWidget {
 
     if (showOverlay) {
       return Container(
-        color: overlayColor ?? Colors.black.withOpacity(0.5),
-        child: Center(child: content),
+        color: overlayColor ?? Colors.black.withOpacity(0.3), // Fondo más sutil
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 40),
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: content,
+          ),
+        ),
       );
     }
 

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/favoritos.dart';
 import 'package:arrendaoco/view/perfil.dart';
+
+import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/view/widgets/notification_badge.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
   final String usuarioId;
@@ -17,6 +21,16 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   int _currentIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    // Iniciar escucha de notificaciones en tiempo real
+    final uid = int.tryParse(widget.usuarioId) ?? 0;
+    if (uid > 0) {
+      NotificacionesService.escucharNotificaciones(uid);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pages = [
       const ExplorarScreen(),
@@ -25,66 +39,71 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('ArrendaOco'),
-        backgroundColor: MiTema.azul,
-        foregroundColor: MiTema.crema,
+        title: const Text(
+          'ArrendaOco',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppGradients.primaryGradient,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
         centerTitle: true,
         automaticallyImplyLeading: false,
+        elevation: 0,
         actions: [
-          IconButton(
-            tooltip: 'Notificaciones',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notificaciones próximamente')),
-              );
-            },
-            icon: Icon(Icons.notifications_outlined, color: MiTema.crema),
-          ),
+          NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
         ],
       ),
-      bottomNavigationBar: NavigationBarTheme(
-        data: const NavigationBarThemeData(
-          backgroundColor: Colors.transparent,
-          indicatorColor: Colors.transparent,
-          iconTheme: WidgetStatePropertyAll(IconThemeData(color: Colors.white)),
-          labelTextStyle: WidgetStatePropertyAll(
-            TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
         ),
-        child: Container(
-          color: MiTema.azul,
-          child: NavigationBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (i) {
-              setState(() {
-                _currentIndex = i;
-              });
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.search_outlined),
-                selectedIcon: Icon(Icons.search),
-                label: 'Explorar',
+        child: NavigationBar(
+          backgroundColor: Colors.transparent,
+          indicatorColor: MiTema.celeste.withOpacity(0.15),
+          elevation: 0,
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (i) {
+            setState(() {
+              _currentIndex = i;
+            });
+          },
+          destinations: [
+            NavigationDestination(
+              icon: Icon(Icons.search_outlined, color: Colors.grey[600]),
+              selectedIcon: Icon(Icons.search_rounded, color: MiTema.azul),
+              label: 'Explorar',
+            ),
+            NavigationDestination(
+              icon: Icon(
+                Icons.favorite_border_rounded,
+                color: Colors.grey[600],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.favorite_outline),
-                selectedIcon: Icon(Icons.favorite),
-                label: 'Favoritos',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'Perfil',
-              ),
-            ],
-          ),
+              selectedIcon: Icon(Icons.favorite_rounded, color: MiTema.azul),
+              label: 'Favoritos',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded, color: Colors.grey[600]),
+              selectedIcon: Icon(Icons.person_rounded, color: MiTema.azul),
+              label: 'Perfil',
+            ),
+          ],
         ),
       ),
-      body: pages[_currentIndex],
+      body: SafeArea(child: pages[_currentIndex]),
     );
   }
 }

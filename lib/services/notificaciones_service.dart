@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:arrendaoco/model/bd.dart';
 
 class NotificacionesService {
@@ -29,6 +30,13 @@ class NotificacionesService {
       },
     );
 
+    // Solicitar permisos específicamente para Android 13+
+    await _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+
     _inicializado = true;
   }
 
@@ -56,8 +64,11 @@ class NotificacionesService {
       iOS: iosDetails,
     );
 
+    // Generar un ID único de 32 bits para que NO se sobrescriban
+    final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
+
     await _notifications.show(
-      DateTime.now().millisecond,
+      notificationId,
       titulo,
       cuerpo,
       details,
@@ -71,19 +82,13 @@ class NotificacionesService {
     required String inmuebleTitulo,
     required double monto,
   }) async {
-    // Guardar en SQLite
+    // Guardar en Supabase para que llegue al inquilino
     // Asumimos que inquilinoId es parseable a int
     await BaseDatos.crearNotificacion(
       usuarioId: int.tryParse(inquilinoId) ?? 0,
       titulo: 'Nueva Renta',
       mensaje: 'Has sido vinculado a: $inmuebleTitulo (\$$monto/mes)',
       tipo: 'renta',
-    );
-
-    // Mostrar notificación push (solo si la app está abierta)
-    await mostrarNotificacion(
-      titulo: '🏠 Nueva Renta',
-      cuerpo: 'Has sido vinculado a: $inmuebleTitulo',
     );
   }
 
@@ -100,11 +105,6 @@ class NotificacionesService {
       mensaje: 'El pago de $inmuebleTitulo vence en $dias días (\$$monto)',
       tipo: 'pago',
     );
-
-    await mostrarNotificacion(
-      titulo: '💰 Pago Próximo',
-      cuerpo: '$inmuebleTitulo - Vence en $dias días',
-    );
   }
 
   /// Notificar pago vencido
@@ -118,11 +118,6 @@ class NotificacionesService {
       titulo: 'Pago Vencido',
       mensaje: 'El pago de $inmuebleTitulo está vencido (\$$monto)',
       tipo: 'pago',
-    );
-
-    await mostrarNotificacion(
-      titulo: '🔴 Pago Vencido',
-      cuerpo: '$inmuebleTitulo - \$$monto',
     );
   }
 
@@ -149,10 +144,95 @@ class NotificacionesService {
       mensaje: 'El pago de $mes para $inmuebleTitulo ha sido confirmado',
       tipo: 'pago',
     );
+  }
 
-    await mostrarNotificacion(
-      titulo: '✅ Pago Confirmado',
-      cuerpo: '$inmuebleTitulo - $mes',
+  /// Notificar nueva reseña al propietario
+  static Future<void> notificarNuevaResena({
+    required int propietarioId,
+    required int inmuebleId,
+    required String nombreInmueble,
+    required String autorNombre,
+    required String comentario,
+    required int resenaId,
+  }) async {
+    await BaseDatos.crearNotificacion(
+      usuarioId: propietarioId,
+      titulo: 'Nueva Reseña',
+      mensaje: '$autorNombre comentó en $nombreInmueble: "$comentario"',
+      tipo: 'resena',
+      referenciaId: resenaId, // Deep link a la reseña
     );
+  }
+
+  static Future<void> notificarRespuestaResena({
+    required int usuarioDestinoId,
+    required String nombreInmueble,
+    required int resenaId,
+    required String mensajeChat, // Agregamos el contenido del mensaje
+    String? tituloPersonalizado, // Título opcional ("Mensaje de X")
+  }) async {
+    await BaseDatos.crearNotificacion(
+      usuarioId: usuarioDestinoId,
+      titulo: tituloPersonalizado ?? 'Nueva respuesta en reseña',
+      mensaje:
+          'En $nombreInmueble: "$mensajeChat"', // Mostramos el mensaje real
+      tipo: 'resena',
+      referenciaId: resenaId,
+    );
+  }
+
+  static RealtimeChannel? _activeChannel;
+
+  static void escucharNotificaciones(int usuarioId) async {
+    // 1. Limpiar suscripción anterior si existe para evitar duplicados
+    if (_activeChannel != null) {
+      await Supabase.instance.client.removeChannel(_activeChannel!);
+      _activeChannel = null;
+    }
+
+    print('🔔 Iniciando suscripción limpia para usuario: $usuarioId');
+
+    // 2. Crear nueva suscripción
+    _activeChannel = Supabase.instance.client.channel(
+      'public:notificaciones:$usuarioId',
+    );
+
+    _activeChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notificaciones',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column:
+                'usuario_id', // Escuchamos donde el usuario es el DESTINATARIO
+            value: usuarioId,
+          ),
+          callback: (payload) async {
+            print('🔔 ¡Notificación REALTIME recibida!');
+            final newRecord = payload.newRecord;
+            if (newRecord.isNotEmpty) {
+              // Extraer datos
+              final titulo = newRecord['titulo'] ?? 'Nueva Notificación';
+              final mensaje = newRecord['mensaje'] ?? 'Tienes un nuevo mensaje';
+
+              // Mostrar notificación local
+              await mostrarNotificacion(
+                titulo: titulo,
+                cuerpo: mensaje,
+                // Podemos pasar data extra en el payload si queremos deep link luego
+              );
+            }
+          },
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            print('✅ Conexión establecida a notificaciones');
+          } else if (status == RealtimeSubscribeStatus.closed) {
+            print('❌ Conexión cerrada');
+          } else if (error != null) {
+            print('⚠️ Error en suscripción: $error');
+          }
+        });
   }
 }

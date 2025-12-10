@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/services/storage_service.dart';
 import 'package:arrendaoco/sensors/ubicacion.dart';
@@ -9,6 +10,7 @@ import 'package:arrendaoco/widgets/map_preview_osm.dart';
 import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
 
 class RegistrarInmuebleScreen extends StatefulWidget {
   final String propietarioId;
@@ -27,8 +29,8 @@ class RegistrarInmuebleScreen extends StatefulWidget {
       _RegistrarInmuebleScreenState();
 }
 
-class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
-  // final FirestoreService _firestoreService = FirestoreService();
+class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
+    with SingleTickerProviderStateMixin {
   final StorageService _storageService = StorageService();
 
   final _formKey = GlobalKey<FormState>();
@@ -48,31 +50,30 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
   String _mensajeUbicacion = '';
   List<XFile> _imagenesSeleccionadas = [];
 
-  InputDecoration _decoracionCampo(String label, IconData? icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: MiTema.azul),
-      prefixIcon: icon != null ? Icon(icon, color: MiTema.celeste) : null,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0)),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide(color: MiTema.celeste.withOpacity(0.6)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide(color: MiTema.azul, width: 1.8),
-      ),
-      filled: true,
-      fillColor: MiTema.blanco,
-    );
-  }
+  late AnimationController _entryController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOut));
+
     if (widget.inmuebleData != null) {
       _cargarDatosInmueble();
     }
+    _entryController.forward();
   }
 
   void _cargarDatosInmueble() {
@@ -80,7 +81,6 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     _tituloController.text = data['titulo'] ?? '';
     _descripcionController.text = data['descripcion'] ?? '';
     _precioController.text = (data['precio'] ?? 0).toString();
-    // Manejar 'disponible' tanto si viene como bool (true/false) o int (1/0)
     final disp = data['disponible'];
     if (disp is bool) {
       _disponible = disp;
@@ -110,6 +110,24 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
       _mensajeUbicacion =
           'Ubicación cargada: Lat ${data['latitud'].toStringAsFixed(5)}, Lng ${data['longitud'].toStringAsFixed(5)}';
     }
+  }
+
+  // Wrapper visual para Dropdowns para que coincidan con StunningTextField
+  Widget _buildDropdownContainer({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
   }
 
   Future<void> seleccionarImagenes() async {
@@ -214,10 +232,8 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
 
     try {
       List<String> imagePaths = [];
-      String tempId = DateTime.now().millisecondsSinceEpoch
-          .toString(); // ID Temporal para carpeta
+      String tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // Guardar imágenes localmente
       if (_imagenesSeleccionadas.isNotEmpty) {
         imagePaths = await _storageService.uploadPropertyImages(
           propertyId: widget.inmuebleId ?? tempId,
@@ -228,8 +244,6 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
           throw Exception('No se pudieron guardar las imágenes.');
         }
       } else if (widget.inmuebleData != null) {
-        // En edición, si no seleccionó nuevas, mantenemos las viejas (?)
-        // En SQLite las guardamos como string separado por comas
         final rutasViejas = widget.inmuebleData!['rutas_imagen'] as String?;
         if (rutasViejas != null) imagePaths = rutasViejas.split(',');
       }
@@ -238,21 +252,21 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
         'titulo': titulo,
         'descripcion': descripcion,
         'precio': precio,
-        'disponible': _disponible ? 1 : 0, // SQLite usa INTEGER para bool
+        'disponible': _disponible ? 1 : 0,
         'categoria': _categoriaSeleccionada,
         'propietario_id': int.tryParse(widget.propietarioId) ?? 0,
         'latitud': _ubicacionActual!.latitude,
         'longitud': _ubicacionActual!.longitude,
-        'rutas_imagen': imagePaths.join(','), // Guardar como texto CSV
+        'rutas_imagen': imagePaths.join(','),
         'camas': _camas,
         'banos': _banos,
         'tamano': _tamano,
-        'estacionamiento': 0, // Default
-        'mascotas': 0, // Default
-        'visitas': 0, // Default
-        'amueblado': 0, // Default
-        'agua': 0, // Default
-        'wifi': 0, // Default
+        'estacionamiento': 0,
+        'mascotas': 0,
+        'visitas': 0,
+        'amueblado': 0,
+        'agua': 0,
+        'wifi': 0,
       };
 
       if (esEdicion) {
@@ -277,7 +291,6 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     } catch (e) {
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
-
       await LottieFeedback.showError(
         context,
         message: 'Error al guardar: ${e.toString()}',
@@ -290,375 +303,488 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen> {
     _tituloController.dispose();
     _descripcionController.dispose();
     _precioController.dispose();
+    _entryController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F7FA), // Gris muy suave
       appBar: AppBar(
-        backgroundColor: MiTema.azul,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppGradients.primaryGradient,
+          ),
+        ),
         title: Text(
-          widget.inmuebleId != null ? 'Editar inmueble' : 'Nuevo inmueble',
-          style: TextStyle(color: MiTema.crema),
+          widget.inmuebleId != null ? 'Editar Inmueble' : 'Nuevo Inmueble',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
-        iconTheme: IconThemeData(color: MiTema.crema),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Card(
-                elevation: 6,
-                color: MiTema.blanco,
-                shadowColor: MiTema.celeste.withOpacity(0.4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Registrar inmueble',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: MiTema.azul,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              physics: const BouncingScrollPhysics(),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Column(
+                    children: [
+                      StunningCard(
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Detalles de la Propiedad',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: MiTema.azul,
+                                    ),
+                                textAlign: TextAlign.center,
                               ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Completa la información para publicar tu propiedad.',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: MiTema.celeste),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        Divider(color: MiTema.celeste.withOpacity(0.4)),
-                        const SizedBox(height: 16),
-
-                        // Título
-                        TextFormField(
-                          controller: _tituloController,
-                          decoration: _decoracionCampo(
-                            'Título del inmueble',
-                            Icons.home_outlined,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Ingresa un título';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Descripción
-                        TextFormField(
-                          controller: _descripcionController,
-                          maxLines: 3,
-                          decoration: _decoracionCampo(
-                            'Descripción',
-                            Icons.notes_outlined,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Ingresa una descripción';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Precio
-                        TextFormField(
-                          controller: _precioController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: _decoracionCampo(
-                            'Precio mensual',
-                            Icons.attach_money,
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Ingresa un precio';
-                            }
-                            final v = double.tryParse(
-                              value.trim().replaceAll(',', '.'),
-                            );
-                            if (v == null || v <= 0) {
-                              return 'Ingresa un precio válido';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Categoría
-                        DropdownButtonFormField<String>(
-                          value: _categoriaSeleccionada,
-                          decoration: _decoracionCampo(
-                            'Categoría',
-                            Icons.apartment,
-                          ),
-                          items: _categorias
-                              .map(
-                                (cat) => DropdownMenuItem(
-                                  value: cat,
-                                  child: Text(cat),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _categoriaSeleccionada = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Selecciona una categoría';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        // CAMAS
-                        DropdownButtonFormField<int>(
-                          value: _camas,
-                          decoration: _decoracionCampo(
-                            'Camas',
-                            Icons.bed_outlined,
-                          ),
-                          items: [1, 2, 3, 4, 5]
-                              .map(
-                                (num) => DropdownMenuItem(
-                                  value: num,
-                                  child: Text('$num'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _camas = value ?? 1),
-                          validator: (value) {
-                            if (value == null) {
-                              return 'Selecciona número de camas';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // BAÑOS
-                        DropdownButtonFormField<int>(
-                          value: _banos,
-                          decoration: _decoracionCampo(
-                            'Baños',
-                            Icons.bathtub_outlined,
-                          ),
-                          items: [1, 2, 3, 4]
-                              .map(
-                                (num) => DropdownMenuItem(
-                                  value: num,
-                                  child: Text('$num'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _banos = value ?? 1),
-                          validator: (value) {
-                            if (value == null) {
-                              return 'Selecciona número de baños';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // TAMAÑO
-                        DropdownButtonFormField<String>(
-                          value: _tamano,
-                          decoration: _decoracionCampo(
-                            'Tamaño',
-                            Icons.square_foot,
-                          ),
-                          items: ['Pequeño', 'Mediano', 'Grande']
-                              .map(
-                                (tam) => DropdownMenuItem(
-                                  value: tam,
-                                  child: Text(tam),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _tamano = value ?? 'Pequeño'),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Selecciona un tamaño';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Disponible
-                        SwitchListTile(
-                          title: Text(
-                            'Disponible para renta',
-                            style: TextStyle(color: MiTema.azul),
-                          ),
-                          value: _disponible,
-                          activeThumbColor: MiTema.celeste,
-                          onChanged: (value) {
-                            setState(() {
-                              _disponible = value;
-                            });
-                          },
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Fotografías
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Fotografías del inmueble',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: MiTema.azul,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: seleccionarImagenes,
-                            icon: const Icon(Icons.photo_library_outlined),
-                            label: const Text('Seleccionar imágenes'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
+                              const SizedBox(height: 8),
+                              Text(
+                                'Haz que tu propiedad destaque con una descripción detallada.',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey[600]),
+                                textAlign: TextAlign.center,
                               ),
-                              side: BorderSide(color: MiTema.celeste),
-                              foregroundColor: MiTema.celeste,
-                            ),
-                          ),
-                        ),
-                        if (_imagenesSeleccionadas.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 170,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _imagenesSeleccionadas.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (context, index) {
-                                final img = _imagenesSeleccionadas[index];
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: ImagenDinamica(
-                                    ruta: img.path,
-                                    width: 220,
-                                    fit: BoxFit.cover,
+                              const SizedBox(height: 24),
+
+                              // Título
+                              StunningTextField(
+                                controller: _tituloController,
+                                label: 'Título del inmueble',
+                                icon: Icons.home_rounded,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Por favor ingresa un título';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Descripción
+                              StunningTextField(
+                                controller: _descripcionController,
+                                label: 'Descripción',
+                                icon: Icons.description_rounded,
+                                maxLines: 3,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Por favor ingresa una descripción';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Precio
+                              StunningTextField(
+                                controller: _precioController,
+                                label: 'Precio mensual',
+                                icon: Icons.attach_money_rounded,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Ingresa el precio';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Categoría y Tamaño (Row)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _buildDropdownContainer(
+                                      child: DropdownButtonFormField<String>(
+                                        isExpanded: true, // Prevent overflow
+                                        value: _categoriaSeleccionada,
+                                        decoration: InputDecoration(
+                                          labelText: 'Categoría',
+                                          prefixIcon: Icon(
+                                            Icons.apartment,
+                                            color: MiTema.celeste,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 15,
+                                              ),
+                                        ),
+                                        items: _categorias
+                                            .map(
+                                              (cat) => DropdownMenuItem(
+                                                value: cat,
+                                                child: Text(
+                                                  cat,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (v) => setState(
+                                          () => _categoriaSeleccionada = v,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildDropdownContainer(
+                                      child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
+                                        value: _tamano,
+                                        decoration: InputDecoration(
+                                          labelText: 'Tamaño',
+                                          prefixIcon: Icon(
+                                            Icons.square_foot,
+                                            color: MiTema.celeste,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 15,
+                                              ),
+                                        ),
+                                        items: ['Pequeño', 'Mediano', 'Grande']
+                                            .map(
+                                              (t) => DropdownMenuItem(
+                                                value: t,
+                                                child: Text(
+                                                  t,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (v) =>
+                                            setState(() => _tamano = v!),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
 
-                        // Ubicación
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Ubicación del inmueble',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                              // Camas y Baños (Row)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _buildDropdownContainer(
+                                      child: DropdownButtonFormField<int>(
+                                        value: _camas,
+                                        decoration: InputDecoration(
+                                          labelText: 'Camas',
+                                          prefixIcon: Icon(
+                                            Icons.bed_rounded,
+                                            color: MiTema.celeste,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 15,
+                                              ),
+                                        ),
+                                        items: [1, 2, 3, 4, 5]
+                                            .map(
+                                              (n) => DropdownMenuItem(
+                                                value: n,
+                                                child: Text('$n'),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (v) =>
+                                            setState(() => _camas = v!),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildDropdownContainer(
+                                      child: DropdownButtonFormField<int>(
+                                        value: _banos,
+                                        decoration: InputDecoration(
+                                          labelText: 'Baños',
+                                          prefixIcon: Icon(
+                                            Icons.bathtub_rounded,
+                                            color: MiTema.celeste,
+                                          ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 15,
+                                              ),
+                                        ),
+                                        items: [1, 2, 3, 4]
+                                            .map(
+                                              (n) => DropdownMenuItem(
+                                                value: n,
+                                                child: Text('$n'),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (v) =>
+                                            setState(() => _banos = v!),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Disponible Switch
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: _disponible
+                                      ? MiTema.celeste.withOpacity(0.1)
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _disponible
+                                        ? MiTema.celeste.withOpacity(0.3)
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                                child: SwitchListTile(
+                                  title: Text(
+                                    'Disponible para renta',
+                                    style: TextStyle(
+                                      color: MiTema.azul,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  value: _disponible,
+                                  activeColor: MiTema.celeste,
+                                  onChanged: (val) =>
+                                      setState(() => _disponible = val),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+
+                              // FOTOGRAFÍAS
+                              Text(
+                                'Galería de Imágenes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                   color: MiTema.azul,
                                 ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _obtenerUbicacion,
-                            icon: const Icon(Icons.gps_fixed),
-                            label: const Text('Obtener ubicación actual'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
                               ),
-                              side: BorderSide(color: MiTema.celeste),
-                              foregroundColor: MiTema.celeste,
-                            ),
-                          ),
-                        ),
-                        if (_mensajeUbicacion.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _mensajeUbicacion,
-                            style: TextStyle(
-                              color: _ubicacionActual != null
-                                  ? Colors.green
-                                  : MiTema.rojo,
-                            ),
-                          ),
-                        ],
-                        if (_ubicacionActual != null) ...[
-                          const SizedBox(height: 10),
-                          MapPreviewOsm(
-                            lat: _ubicacionActual!.latitude,
-                            lng: _ubicacionActual!.longitude,
-                          ),
-                        ],
-                        const SizedBox(height: 20),
+                              const SizedBox(height: 12),
+                              InkWell(
+                                onTap: seleccionarImagenes,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[50], // Very light grey
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: MiTema.celeste.withOpacity(0.5),
+                                      style: BorderStyle.solid,
+                                      width: 1.5,
+                                    ),
+                                    // Make it look like a dashed area or inviting area
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.add_photo_alternate_rounded,
+                                        size: 40,
+                                        color: MiTema.celeste,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Toca para seleccionar fotos',
+                                        style: TextStyle(
+                                          color: MiTema.celeste,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (_imagenesSeleccionadas.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 120,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _imagenesSeleccionadas.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(width: 12),
+                                    itemBuilder: (context, index) {
+                                      final img = _imagenesSeleccionadas[index];
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.1,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: ImagenDinamica(
+                                            ruta: img.path,
+                                            width: 120,
+                                            height: 120,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 30),
 
-                        // Botón guardar
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _guardarInmueble,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: MiTema.celeste,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 50,
-                                vertical: 14,
+                              // UBICACIÓN
+                              Text(
+                                'Ubicación',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: MiTema.azul,
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              const SizedBox(height: 12),
+                              if (_ubicacionActual == null)
+                                StunningButton(
+                                  onPressed: _obtenerUbicacion,
+                                  text: 'Obtener Ubicación Actual',
+                                  icon: Icons.location_on_rounded,
+                                )
+                              else
+                                Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.green.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.check_circle,
+                                            color: Colors.green,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _mensajeUbicacion,
+                                              style: TextStyle(
+                                                color: Colors.green[800],
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.refresh,
+                                              color: Colors.green,
+                                            ),
+                                            onPressed: _obtenerUbicacion,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: MapPreviewOsm(
+                                        lat: _ubicacionActual!.latitude,
+                                        lng: _ubicacionActual!.longitude,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                              const SizedBox(height: 40),
+
+                              // BOTÓN GUARDAR
+                              StunningButton(
+                                onPressed: _guardarInmueble,
+                                text: widget.inmuebleId != null
+                                    ? 'ACTUALIZAR PROPIEDAD'
+                                    : 'PUBLICAR PROPIEDAD',
+                                icon: Icons.publish_rounded,
                               ),
-                            ),
-                            child: Text(
-                              widget.inmuebleId != null
-                                  ? 'Actualizar inmueble'
-                                  : 'Guardar inmueble',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),

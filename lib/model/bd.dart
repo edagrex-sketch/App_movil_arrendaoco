@@ -55,27 +55,79 @@ class BaseDatos {
     int id,
     Map<String, dynamic> data,
   ) async {
-    // Supabase update no devuelve 'rows affected' como int directamente de la misma forma que sqflite
-    // Pero si no falla, asumimos éxito. Retornamos ID por convención.
     await _supabase.from('inmuebles').update(data).eq('id', id);
     return id;
   }
 
+  static Future<Map<String, dynamic>?> obtenerInmueblePorId(int id) async {
+    final response = await _supabase
+        .from('inmuebles')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    return response;
+  }
+
   static Future<int> eliminarInmueble(int id) async {
+    await _supabase.from('favoritos').delete().eq('inmueble_id', id);
+    await _supabase.from('resenas').delete().eq('inmueble_id', id);
+
+    final rentas = await _supabase
+        .from('rentas')
+        .select('id')
+        .eq('inmueble_id', id);
+    for (var r in rentas) {
+      final rId = r['id'];
+      await _supabase.from('pagos_renta').delete().eq('renta_id', rId);
+      await _supabase.from('calendario').delete().eq('renta_id', rId);
+    }
+    await _supabase.from('rentas').delete().eq('inmueble_id', id);
     await _supabase.from('inmuebles').delete().eq('id', id);
-    return id; // Retornamos ID eliminado
+    return id;
   }
 
   // ================== RESEÑAS ==================
 
+  /// Inserta una reseña y devuelve su ID.
   static Future<int> insertarResena(Map<String, dynamic> resena) async {
-    // En Supabase 'rating' es integer, asegurarse que se envíe bien
-    final response = await _supabase
-        .from('resenas')
-        .insert(resena)
-        .select('id')
-        .single();
-    return response['id'] as int;
+    try {
+      final response = await _supabase
+          .from('resenas')
+          .insert(resena)
+          .select('id')
+          .single();
+      return response['id'] as int;
+    } on PostgrestException catch (e) {
+      if (resena.containsKey('usuario_id')) {
+        print(
+          '⚠️ Error insertando reseña: ${e.message}. Reintentando sin usuario_id.',
+        );
+        final copia = Map<String, dynamic>.from(resena);
+        copia.remove('usuario_id');
+        final response = await _supabase
+            .from('resenas')
+            .insert(copia)
+            .select('id')
+            .single();
+        return response['id'] as int;
+      }
+      rethrow;
+    }
+  }
+
+  /// Obtiene una reseña específica por su ID.
+  static Future<Map<String, dynamic>?> obtenerResenaPorId(int id) async {
+    try {
+      final response = await _supabase
+          .from('resenas')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+      return response;
+    } catch (e) {
+      print('Error buscando reseña $id: $e');
+      return null;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerResenasPorInmueble(
@@ -92,8 +144,6 @@ class BaseDatos {
   static Future<Map<String, dynamic>> obtenerResumenResenas(
     int inmuebleId,
   ) async {
-    // Supabase no tiene agregation queries directas simples en el cliente Dart sin usar RPC.
-    // Lo haremos en cliente por ahora (no es ideal para millones de filas, pero ok por ahora)
     final response = await _supabase
         .from('resenas')
         .select('rating')
@@ -107,6 +157,54 @@ class BaseDatos {
     final promedio = sum / total;
 
     return {'promedio': promedio.toDouble(), 'total': total};
+  }
+
+  static Future<void> actualizarResena(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    await _supabase.from('resenas').update(data).eq('id', id);
+  }
+
+  static Future<void> eliminarResena(int id) async {
+    await _supabase.from('resenas').delete().eq('id', id);
+  }
+
+  static Future<void> responderResena(int id, String respuesta) async {
+    await _supabase
+        .from('resenas')
+        .update({
+          'respuesta': respuesta,
+          'fecha_respuesta': DateTime.now().toIso8601String(),
+        })
+        .eq('id', id);
+  }
+
+  // ================== CHAT EN RESEÑAS ==================
+
+  static Stream<List<Map<String, dynamic>>> obtenerMensajesResena(
+    int resenaId,
+  ) {
+    return _supabase
+        .from('mensajes_resena')
+        .stream(primaryKey: ['id'])
+        .eq('resena_id', resenaId)
+        .order('fecha', ascending: true);
+  }
+
+  static Future<void> enviarMensajeResena({
+    required int resenaId,
+    required int usuarioId,
+    required String usuarioNombre,
+    required String mensaje,
+  }) async {
+    await _supabase.from('mensajes_resena').insert({
+      'resena_id': resenaId,
+      'usuario_id': usuarioId,
+      'usuario_nombre': usuarioNombre,
+      'mensaje': mensaje,
+      'fecha': DateTime.now().toIso8601String(),
+    });
   }
 
   // ================== FAVORITOS ==================
@@ -143,18 +241,12 @@ class BaseDatos {
   static Future<List<Map<String, dynamic>>> obtenerFavoritos(
     int usuarioId,
   ) async {
-    // Join manual: Obtener favoritos y luego inmuebles, o usar select relacional
-    // Usaremos select relacional: inmuebles!inner(...)
-    // Ojo: La tabla favoritos tiene inmueble_id.
-    // Query: Select all favorites for user, expand inmueble data.
-
     final response = await _supabase
         .from('favoritos')
         .select('*, inmuebles(*)')
         .eq('usuario_id', usuarioId)
         .order('fecha_agregado', ascending: false);
 
-    // Mapear resultado para que parezca una lista de inmuebles plana, como espera la UI
     final List<Map<String, dynamic>> resultados = [];
     for (var item in response) {
       if (item['inmuebles'] != null) {
@@ -217,19 +309,12 @@ class BaseDatos {
   static Future<List<Map<String, dynamic>>> obtenerRentasPorArrendador(
     int arrendadorId,
   ) async {
-    // Necesitamos datos de inquilino e inmueble
-    // Relaciones: rentas -> inmuebles, rentas -> usuarios (inquilino_id)
-    // Ojo: inquilino_id es FK a usuarios. Supabase detecta FKs. as 'inquilino' si configuramos el nombre o usamos la tabla directamente.
-    // Como tenemos multiples FK a usuarios (arrendador, inquilino), necesitamos especificar cual.
-    // Sintaxis: usuarios!inquilino_id(...)
-
     final response = await _supabase
         .from('rentas')
         .select('*, inmuebles(*), inquilino:usuarios!inquilino_id(*)')
         .eq('arrendador_id', arrendadorId)
         .order('fecha_inicio', ascending: false);
 
-    // Aplanar para compatibilidad
     return List<Map<String, dynamic>>.from(
       response.map((r) {
         final inmueble = r['inmuebles'] as Map<String, dynamic>;
@@ -240,7 +325,6 @@ class BaseDatos {
         newMap['rutas_imagen'] = inmueble['rutas_imagen'];
         newMap['inquilino_nombre'] = inquilino['nombre'];
 
-        // Limpiar objetos anidados si queremos o dejarlos
         return newMap;
       }),
     );
@@ -264,141 +348,71 @@ class BaseDatos {
         newMap['inmueble_titulo'] = inmueble['titulo'];
         newMap['rutas_imagen'] = inmueble['rutas_imagen'];
         newMap['arrendador_nombre'] = arrendador['nombre'];
+
         return newMap;
       }),
     );
   }
 
-  static Future<Map<String, dynamic>?> obtenerRentaPorId(int rentaId) async {
+  static Future<Map<String, dynamic>?> obtenerRentaPorId(int id) async {
     final response = await _supabase
         .from('rentas')
         .select(
-          '*, inmuebles(*), inquilino:usuarios!inquilino_id(*), arrendador:usuarios!arrendador_id(*)',
+          '*, inmuebles(*), arrendador:usuarios!arrendador_id(*), inquilino:usuarios!inquilino_id(*)',
         )
-        .eq('id', rentaId)
+        .eq('id', id)
         .maybeSingle();
 
     if (response == null) return null;
 
     final inmueble = response['inmuebles'] as Map<String, dynamic>;
-    final inquilino = response['inquilino'] as Map<String, dynamic>;
     final arrendador = response['arrendador'] as Map<String, dynamic>;
+    final inquilino = response['inquilino'] as Map<String, dynamic>;
 
     final newMap = Map<String, dynamic>.from(response);
     newMap['inmueble_titulo'] = inmueble['titulo'];
     newMap['rutas_imagen'] = inmueble['rutas_imagen'];
-    newMap['inquilino_nombre'] = inquilino['nombre'];
-    newMap['inquilino_id'] = inquilino['id'];
     newMap['arrendador_nombre'] = arrendador['nombre'];
-    newMap['arrendador_id'] = arrendador['id'];
+    newMap['inquilino_nombre'] = inquilino['nombre'];
 
     return newMap;
   }
 
-  static Future<bool> verificarInquilinoExiste(int inquilinoId) async {
+  static Future<int> verificarInquilinoExiste(String email) async {
     final response = await _supabase
         .from('usuarios')
-        .select()
-        .eq('id', inquilinoId)
-        .eq('rol', 'Inquilino')
-        .maybeSingle();
-    return response != null;
-  }
-
-  static Future<bool> inmuebleTieneRentaActiva(int inmuebleId) async {
-    final response = await _supabase
-        .from('rentas')
-        .select()
-        .eq('inmueble_id', inmuebleId)
-        .eq('estado', 'activa')
-        .maybeSingle();
-    return response != null;
-  }
-
-  static Future<int> actualizarEstadoRenta(int rentaId, String estado) async {
-    await _supabase.from('rentas').update({'estado': estado}).eq('id', rentaId);
-    return rentaId;
-  }
-
-  // ================== PAGOS DE RENTA ==================
-
-  static Future<int> registrarPago(Map<String, dynamic> pago) async {
-    final response = await _supabase
-        .from('pagos_renta')
-        .insert(pago)
         .select('id')
-        .single();
+        .eq('email', email)
+        .eq('rol', 'inquilino')
+        .maybeSingle();
+
+    if (response == null) return 0;
     return response['id'] as int;
   }
 
-  static Future<List<Map<String, dynamic>>> obtenerPagosPorRenta(
-    int rentaId,
-  ) async {
-    final response = await _supabase
-        .from('pagos_renta')
-        .select()
-        .eq('renta_id', rentaId)
-        .order('anio', ascending: true)
-        .order(
-          'mes',
-          ascending: true,
-        ); // Mes es texto... esto podría ordenar alfabéticamente mal si no usamos nº. Pero seguimos lógica previa.
-    // Lo ideal sería tener un campo mes_numero, pero seguimos backward compat.
-
-    return List<Map<String, dynamic>>.from(response);
-  }
-
-  static Future<int> actualizarEstadoPago(
-    int pagoId,
-    String estado,
-    String? fechaPago,
-  ) async {
-    final data = {'estado': estado};
-    if (fechaPago != null) {
-      data['fecha_pago'] = fechaPago;
-    }
-    await _supabase.from('pagos_renta').update(data).eq('id', pagoId);
-    return pagoId;
-  }
-
-  static Future<Map<String, dynamic>?> obtenerProximoPago(int rentaId) async {
-    // orderBy fecha_vencimiento
-    final response = await _supabase
-        .from('pagos_renta')
-        .select()
-        .eq('renta_id', rentaId)
-        .eq('estado', 'pendiente')
-        .order('fecha_vencimiento', ascending: true)
-        .limit(1)
-        .maybeSingle();
-    return response;
-  }
+  // ================== PAGOS ==================
 
   static Future<void> generarPagosMensuales(
     int rentaId,
     DateTime fechaInicio,
+    int duracionMeses,
     double monto,
-    int diaPago,
-    int meses,
   ) async {
-    final List<Map<String, dynamic>> pagos = [];
-
-    for (int i = 0; i < meses; i++) {
-      final fecha = DateTime(fechaInicio.year, fechaInicio.month + i, diaPago);
-      final mes = _getNombreMes(fecha.month);
-      final anio = fecha.year;
-
+    List<Map<String, dynamic>> pagos = [];
+    for (int i = 0; i < duracionMeses; i++) {
+      final fechaPago = DateTime(
+        fechaInicio.year,
+        fechaInicio.month + i,
+        fechaInicio.day,
+      );
       pagos.add({
         'renta_id': rentaId,
-        'mes': mes,
-        'anio': anio,
+        'fecha_pago': fechaPago.toIso8601String(),
         'monto': monto,
-        'fecha_vencimiento': fecha.toIso8601String(),
         'estado': 'pendiente',
+        'mes_correspondiente': _getNombreMes(fechaPago.month),
       });
     }
-
-    // Batch insert
     await _supabase.from('pagos_renta').insert(pagos);
   }
 
@@ -420,6 +434,29 @@ class BaseDatos {
     return meses[mes - 1];
   }
 
+  static Future<List<Map<String, dynamic>>> obtenerPagosDeRenta(
+    int rentaId,
+  ) async {
+    final response = await _supabase
+        .from('pagos_renta')
+        .select()
+        .eq('renta_id', rentaId)
+        .order('fecha_pago', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Future<void> actualizarEstadoPago(
+    int pagoId,
+    String nuevoEstado, [
+    String? fechaReal,
+  ]) async {
+    final Map<String, dynamic> data = {'estado': nuevoEstado};
+    // Descomentar si existe columna para guardar fecha real de pago:
+    // if (fechaReal != null) data['fecha_pago_real'] = fechaReal;
+
+    await _supabase.from('pagos_renta').update(data).eq('id', pagoId);
+  }
+
   // ================== NOTIFICACIONES ==================
 
   static Future<int> crearNotificacion({
@@ -427,20 +464,44 @@ class BaseDatos {
     required String titulo,
     required String mensaje,
     String tipo = 'sistema',
+    int? referenciaId,
   }) async {
-    final response = await _supabase
-        .from('notificaciones')
-        .insert({
-          'usuario_id': usuarioId,
-          'titulo': titulo,
-          'mensaje': mensaje,
-          'tipo': tipo,
-          'leida': 0,
-          'fecha': DateTime.now().toIso8601String(),
-        })
-        .select('id')
-        .single();
-    return response['id'] as int;
+    final data = {
+      'usuario_id': usuarioId,
+      'titulo': titulo,
+      'mensaje': mensaje,
+      'tipo': tipo,
+      'leida': 0,
+      'fecha': DateTime.now().toIso8601String(),
+    };
+    // No agregamos referencia_id si es null para evitar violaciones de foreign key si es que hay
+    if (referenciaId != null) {
+      data['referencia_id'] = referenciaId;
+    }
+
+    try {
+      final response = await _supabase
+          .from('notificaciones')
+          .insert(data)
+          .select('id')
+          .single();
+      return response['id'] as int;
+    } catch (e) {
+      // Si falla, intentamos sin referencia_id por si hay un error de schema/FK
+      if (referenciaId != null) {
+        print(
+          '⚠️ Error al crear notificación con ref: $e. Reintentando sin ref.',
+        );
+        data.remove('referencia_id');
+        final response = await _supabase
+            .from('notificaciones')
+            .insert(data)
+            .select('id')
+            .single();
+        return response['id'] as int;
+      }
+      rethrow;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerNotificaciones(

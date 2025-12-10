@@ -3,6 +3,8 @@ import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DetalleRentaScreen extends StatefulWidget {
   final String rentaId;
@@ -14,20 +16,19 @@ class DetalleRentaScreen extends StatefulWidget {
 }
 
 class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
-  // final FirestoreService _firestoreService = FirestoreService();
   late Future<Map<String, dynamic>?> _futureRenta;
-  late Future<List<Map<String, dynamic>>> _futurePagos;
+  late Stream<List<Map<String, dynamic>>> _pagosStream;
 
   @override
   void initState() {
     super.initState();
-    _cargarDatos();
-  }
-
-  void _cargarDatos() {
     final rId = int.tryParse(widget.rentaId) ?? 0;
     _futureRenta = BaseDatos.obtenerRentaPorId(rId);
-    _futurePagos = BaseDatos.obtenerPagosPorRenta(rId);
+    _pagosStream = Supabase.instance.client
+        .from('pagos_renta')
+        .stream(primaryKey: ['id'])
+        .eq('contrato_id', rId)
+        .order('fecha_limite', ascending: false);
   }
 
   @override
@@ -75,13 +76,12 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (primeraUrl != null)
-                  if (primeraUrl != null)
-                    ImagenDinamica(
-                      ruta: primeraUrl,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
+                  ImagenDinamica(
+                    ruta: primeraUrl,
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -133,14 +133,18 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      FutureBuilder<List<Map<String, dynamic>>>(
-                        future: _futurePagos,
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: _pagosStream,
                         builder: (context, pagoSnapshot) {
                           if (pagoSnapshot.connectionState ==
                               ConnectionState.waiting) {
                             return const Center(
                               child: CircularProgressIndicator(),
                             );
+                          }
+
+                          if (pagoSnapshot.hasError) {
+                            return Text('Error: ${pagoSnapshot.error}');
                           }
 
                           final pagos = pagoSnapshot.data ?? [];
@@ -265,7 +269,6 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                     'pagado',
                     DateTime.now().toIso8601String(),
                   );
-                  setState(() => _cargarDatos());
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Pago marcado como pagado')),

@@ -419,16 +419,28 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                         return;
                       }
 
-                      // Verificar que el inquilino existe
-                      final existe = await BaseDatos.verificarInquilinoExiste(
+                      // Verificar que el inquilino existe y es inquilino
+                      final usuarioData = await BaseDatos.obtenerUsuario(
                         inquilinoId,
                       );
-                      if (!existe) {
+
+                      if (usuarioData == null) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('No existe usuario con ese ID'),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+
+                      if (usuarioData['rol'] != 'inquilino') {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'No existe un inquilino con ese ID',
+                                'El usuario no tiene rol de inquilino',
                               ),
                             ),
                           );
@@ -462,10 +474,8 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
 
                       // Obtener datos del inmueble
                       final iid = int.tryParse(inmuebleSeleccionado!) ?? 0;
-                      // inmuebleData is implicit in DB relations but we need it for notification title if we want
 
                       // Crear renta
-                      // Note: bd.dart method crearRenta returns int
                       final rentaId = await BaseDatos.crearRenta({
                         'inmueble_id': iid,
                         'arrendador_id': uid,
@@ -476,13 +486,13 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                         'estado': 'activa',
                       });
 
-                      // Generar pagos mensuales (12 meses)
+                      // Generar pagos mensuales (12 meses por defecto)
+                      // Corregido orden de argumentos: rentaId, fechaInicio, meses, monto
                       await BaseDatos.generarPagosMensuales(
                         rentaId,
                         fechaInicio,
+                        12, // Duración en meses
                         monto,
-                        diaPago,
-                        12,
                       );
 
                       // Notificar al inquilino (Local DB notification)

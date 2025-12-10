@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-
 import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/login.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
@@ -11,8 +12,9 @@ import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/view/editar_perfil.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
-import 'package:arrendaoco/services/notificaciones_service.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
+import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -24,12 +26,50 @@ class PerfilScreen extends StatefulWidget {
 class _PerfilScreenState extends State<PerfilScreen> {
   bool _notificacionesActivas = true;
 
+  // Real-time streams
+  late Stream<List<Map<String, dynamic>>> _userStream;
+  late Stream<List<Map<String, dynamic>>> _favoritosStream;
+  late Stream<List<Map<String, dynamic>>> _inmueblesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
+
+    // Stream del usuario actual
+    _userStream = Supabase.instance.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('id', uid);
+
+    // Stream de favoritos
+    _favoritosStream = Supabase.instance.client
+        .from('favoritos')
+        .stream(primaryKey: ['id'])
+        .eq('usuario_id', uid);
+
+    // Stream de inmuebles (para contar publicados)
+    if (SesionActual.rol == 'Arrendador' ||
+        SesionActual.rol == 'Administrador') {
+      _inmueblesStream = Supabase.instance.client
+          .from('inmuebles')
+          .stream(primaryKey: ['id'])
+          .eq('propietario_id', uid);
+    } else {
+      _inmueblesStream = Stream.value([]);
+    }
+  }
+
   Future<void> _cerrarSesion(BuildContext context) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: MiTema.blanco,
-        title: Text('Cerrar sesión', style: TextStyle(color: MiTema.azul)),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Cerrar sesión',
+          style: TextStyle(color: MiTema.azul, fontWeight: FontWeight.bold),
+        ),
         content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
         actions: [
           TextButton(
@@ -39,18 +79,21 @@ class _PerfilScreenState extends State<PerfilScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: MiTema.rojo),
-            child: const Text('Cerrar sesión'),
+            child: const Text(
+              'Cerrar sesión',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmar == true && context.mounted) {
-      // Limpiar sesión local
       SesionActual.usuarioId = null;
       SesionActual.nombre = '';
       SesionActual.email = '';
       SesionActual.rol = '';
+      SesionActual.publicId = null;
 
       FCMService.dispose();
 
@@ -62,118 +105,165 @@ class _PerfilScreenState extends State<PerfilScreen> {
     }
   }
 
-  void _recargarPerfil() {
-    setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Usamos datos de sesion_actual, que se actualizan al editar perfil
-    final nombre = SesionActual.nombre.isEmpty
-        ? 'Usuario'
-        : SesionActual.nombre;
-    const username = ''; // Opcional
-
     return Container(
-      color: Colors.white,
+      color: const Color(0xFFF5F7FA),
       child: CustomScrollView(
         slivers: [
-          // Encabezado del perfil
           SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-              decoration: BoxDecoration(
-                color: MiTema.azul,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(26),
-                  bottomRight: Radius.circular(26),
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Avatar (intentamos cargar de red si hay URL en un futuro, por ahora static o local)
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: MiTema.crema,
-                    child: Icon(Icons.person, size: 60, color: MiTema.azul),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    nombre,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: MiTema.crema,
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _userStream,
+              builder: (context, snapshot) {
+                String? fotoPerfilUrl;
+                String displayName = SesionActual.nombre;
+
+                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                  final userData = snapshot.data!.first;
+                  fotoPerfilUrl = userData['foto_perfil'];
+                  displayName = userData['nombre'] ?? displayName;
+                  // Sync singleton
+                  SesionActual.nombre = displayName;
+                }
+
+                return Container(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  decoration: const BoxDecoration(
+                    gradient: AppGradients.primaryGradient,
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
                     ),
-                  ),
-                  if (username.isNotEmpty)
-                    Text(
-                      username,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: MiTema.crema.withOpacity(0.9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
                       ),
-                    ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    ],
+                  ),
+                  child: SafeArea(
+                    child: Column(
                       children: [
-                        Icon(Icons.badge, size: 16, color: MiTema.crema),
-                        const SizedBox(width: 6),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.5),
+                              width: 2,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.white,
+                            backgroundImage:
+                                fotoPerfilUrl != null &&
+                                    fotoPerfilUrl.isNotEmpty
+                                ? NetworkImage(fotoPerfilUrl)
+                                : null,
+                            child:
+                                (fotoPerfilUrl == null || fotoPerfilUrl.isEmpty)
+                                ? Icon(
+                                    Icons.person_rounded,
+                                    size: 60,
+                                    color: MiTema.celeste,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         Text(
-                          'ID: ${SesionActual.publicId ?? SesionActual.usuarioId ?? "N/A"}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: MiTema.crema,
+                          displayName.isEmpty ? 'Usuario' : displayName,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.badge_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'ID: ${SesionActual.publicId ?? SesionActual.usuarioId ?? "N/A"}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-          // Estadísticas
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // Stats
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverToBoxAdapter(
               child: Row(
                 children: [
                   Expanded(
-                    child: _StatCard(
-                      icon: Icons.favorite_outline,
-                      title: 'Favoritos',
-                      value: '0',
-                      color: Colors.red,
+                    child: StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: _favoritosStream,
+                      builder: (context, snapshot) {
+                        final count = snapshot.data?.length ?? 0;
+                        return _StatCard(
+                          icon: Icons.favorite_rounded,
+                          title: 'Favoritos',
+                          value: '$count',
+                          color: MiTema.rojo,
+                        );
+                      },
                     ),
                   ),
+                  if (SesionActual.rol == 'Arrendador' ||
+                      SesionActual.rol == 'Administrador') ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: _inmueblesStream,
+                        builder: (context, snapshot) {
+                          final count = snapshot.data?.length ?? 0;
+                          return _StatCard(
+                            icon: Icons.home_work_rounded,
+                            title: 'Publicados',
+                            value: '$count',
+                            color: MiTema.vino,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(
-                      icon: Icons.home_outlined,
-                      title: 'Publicados',
-                      value: '0',
-                      color: MiTema.vino,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      icon: Icons.mail_outline,
+                      icon: Icons.chat_bubble_rounded,
                       title: 'Mensajes',
                       value: '0',
                       color: MiTema.celeste,
@@ -183,284 +273,249 @@ class _PerfilScreenState extends State<PerfilScreen> {
               ),
             ),
           ),
+
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Sección: Mis publicaciones (Solo si es Arrendador o Mixto)
+          // Arrendador Panel
           if (SesionActual.rol == 'Arrendador' ||
               SesionActual.rol == 'Administrador')
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mis publicaciones',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: MiTema.azul,
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+              sliver: SliverToBoxAdapter(
+                child: StunningCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.real_estate_agent_rounded,
+                            color: MiTema.azul,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Panel Arrendador',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: MiTema.azul,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        // Publicar
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.add_home_work_outlined,
-                            label: 'Publicar',
-                            bgColor: MiTema.celeste,
-                            onTap: () {
-                              final propietarioId =
-                                  SesionActual.usuarioId ?? '';
-                              if (propietarioId.isEmpty) return;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => RegistrarInmuebleScreen(
-                                    propietarioId: propietarioId,
-                                  ),
-                                ),
-                              );
-                            },
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _QuickActionButton(
+                              icon: Icons.add_home_work_rounded,
+                              label: 'Publicar',
+                              gradient: AppGradients.accentGradient,
+                              onTap: () async {
+                                final pid = SesionActual.usuarioId ?? '';
+                                if (pid.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          RegistrarInmuebleScreen(
+                                            propietarioId: pid,
+                                          ),
+                                    ),
+                                  );
+                                  // No need to manual reload as stream handles it
+                                }
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Ver todas
-                        Expanded(
-                          child: _QuickActionButton(
-                            icon: Icons.list_outlined,
-                            label: 'Ver todas',
-                            bgColor: MiTema.vino,
-                            onTap: () {
-                              final usuarioId = SesionActual.usuarioId ?? '';
-                              if (usuarioId.isEmpty) return;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      ArrendadorScreen(usuarioId: usuarioId),
-                                ),
-                              );
-                            },
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _QuickActionButton(
+                              icon: Icons.dashboard_customize_rounded,
+                              label: 'Gestionar',
+                              gradient: AppGradients.primaryGradient,
+                              onTap: () {
+                                final uid = SesionActual.usuarioId ?? '';
+                                if (uid.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          ArrendadorScreen(usuarioId: uid),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
 
-          // Sección: Cuenta
-          SliverToBoxAdapter(
-            child: _SectionCard(
-              title: 'Cuenta',
-              headerColor: MiTema.azul,
-              children: [
-                _SettingsTile(
-                  icon: Icons.person_outline,
-                  title: 'Editar perfil',
-                  onTap: () async {
-                    final cambio = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const EditarPerfilScreen(),
-                      ),
-                    );
-                    if (cambio == true) {
-                      _recargarPerfil();
-                    }
-                  },
-                ),
-                _SettingsTile(
-                  icon: Icons.home_work,
-                  title: 'Mis Rentas',
-                  onTap: () {
-                    final rol = SesionActual.rol;
-                    if (rol == 'Arrendador') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const GestionarRentasScreen(),
-                        ),
-                      );
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MisRentasScreen(),
-                        ),
-                      );
-                    }
-                  },
-                ),
-                _SettingsTile(
-                  icon: Icons.calendar_today,
-                  title: 'Calendario',
-                  onTap: () {
-                    final rol = SesionActual.rol;
-                    if (rol == 'Arrendador') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CalendarioArrendadorScreen(),
-                        ),
-                      );
-                    } else {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CalendarioInquilinoScreen(),
-                        ),
-                      );
-                    }
-                  },
-                  showDivider: false,
-                ),
-              ],
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          if (SesionActual.rol == 'Arrendador' ||
+              SesionActual.rol == 'Administrador')
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Sección: Preferencias
-          SliverToBoxAdapter(
-            child: _SectionCard(
-              title: 'Preferencias',
-              headerColor: MiTema.azul,
-              children: [
-                _SettingsTile(
-                  icon: Icons.notifications_outlined,
-                  title: 'Notificaciones',
-                  trailing: Switch(
-                    value: _notificacionesActivas,
-                    onChanged: (val) async {
-                      setState(() {
-                        _notificacionesActivas = val;
-                      });
-                      if (val) {
-                        try {
-                          // Feedback vistoso
-                          await LottieFeedback.showSuccess(
+          // Sections
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                _SectionHeader(title: 'CUENTA'),
+                StunningCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.person_rounded,
+                        title: 'Editar perfil',
+                        onTap: () {
+                          Navigator.push(
                             context,
-                            message: 'Notificaciones Activadas',
-                            duration: const Duration(milliseconds: 1400),
+                            MaterialPageRoute(
+                              builder: (context) => const EditarPerfilScreen(),
+                            ),
                           );
-                          // Notificación local de prueba
-                          await NotificacionesService.mostrarNotificacion(
-                            titulo: '🔔 Notificaciones Activas',
-                            cuerpo:
-                                'Te mantendremos al tanto de tus rentas y novedades.',
-                          );
-                        } catch (e) {
-                          print('Error al mostrar notificación: $e');
-                        }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Notificaciones desactivadas'),
-                            duration: Duration(milliseconds: 1000),
-                          ),
-                        );
-                      }
-                    },
-                    activeThumbColor: MiTema.celeste,
-                  ),
-                ),
-                _SettingsTile(
-                  icon: Icons.dark_mode_outlined,
-                  title: 'Tema oscuro',
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (_) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Tema oscuro aún no implementado'),
-                        ),
-                      );
-                    },
-                    activeThumbColor: MiTema.celeste,
-                  ),
-                  showDivider: false,
-                ),
-              ],
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-          // Sección: Soporte
-          SliverToBoxAdapter(
-            child: _SectionCard(
-              title: 'Soporte',
-              headerColor: MiTema.azul,
-              children: [
-                _SettingsTile(
-                  icon: Icons.help_outline,
-                  title: 'Centro de ayuda',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Centro de ayuda próximamente'),
+                        },
                       ),
-                    );
-                  },
+                      _SettingsTile(
+                        icon: Icons.key_rounded,
+                        title: 'Mis Rentas',
+                        onTap: () {
+                          if (SesionActual.rol == 'Arrendador') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const GestionarRentasScreen(),
+                              ),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MisRentasScreen(),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _SettingsTile(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Calendario',
+                        showDivider: false,
+                        onTap: () {
+                          if (SesionActual.rol == 'Arrendador') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const CalendarioArrendadorScreen(),
+                              ),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const CalendarioInquilinoScreen(),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                _SettingsTile(
-                  icon: Icons.info_outline,
-                  title: 'Acerca de ArrendaOco',
-                  onTap: () {
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'ArrendaOco',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: Icon(Icons.home, color: MiTema.azul),
-                      children: const [
-                        Text('Aplicación para renta de inmuebles.'),
-                      ],
-                    );
-                  },
-                  showDivider: false,
-                ),
-              ],
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Botón Cerrar sesión
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _cerrarSesion(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: MiTema.rojo,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Cerrar sesión',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                const SizedBox(height: 24),
+                _SectionHeader(title: 'PREFERENCIAS'),
+                StunningCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.notifications_active_rounded,
+                        title: 'Notificaciones',
+                        trailing: Switch(
+                          value: _notificacionesActivas,
+                          activeColor: MiTema.celeste,
+                          onChanged: (val) {
+                            setState(() => _notificacionesActivas = val);
+                            if (val) {
+                              LottieFeedback.showSuccess(
+                                context,
+                                message: 'Notificaciones activas',
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.dark_mode_rounded,
+                        title: 'Tema Oscuro',
+                        showDivider: false,
+                        trailing: Switch(
+                          value: false,
+                          onChanged: (val) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Próximamente...')),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+
+                const SizedBox(height: 24),
+                _SectionHeader(title: 'SOPORTE'),
+                StunningCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.help_outline_rounded,
+                        title: 'Centro de Ayuda',
+                        onTap: () {},
+                      ),
+                      _SettingsTile(
+                        icon: Icons.info_outline_rounded,
+                        title: 'Acerca de ArrendaOco',
+                        showDivider: false,
+                        onTap: () {
+                          showAboutDialog(
+                            context: context,
+                            applicationName: 'ArrendaOco',
+                            applicationVersion: '2.0.0 Stunning',
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                StunningButton(
+                  onPressed: () => _cerrarSesion(context),
+                  text: 'CERRAR SESIÓN',
+                  icon: Icons.logout_rounded,
+                ),
+
+                const SizedBox(height: 40),
+              ]),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
     );
   }
 }
-
-// ================= Widgets auxiliares =================
 
 class _StatCard extends StatelessWidget {
   final IconData icon;
@@ -478,16 +533,15 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        color: MiTema.blanco,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.25)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.12),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: color.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -503,8 +557,14 @@ class _StatCard extends StatelessWidget {
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -514,38 +574,43 @@ class _StatCard extends StatelessWidget {
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color bgColor;
+  final Gradient gradient;
   final VoidCallback onTap;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
-    required this.bgColor,
+    required this.gradient,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        height: 80,
         decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 2),
-            Icon(icon, color: Colors.white, size: 24),
+            Icon(icon, color: Colors.white, size: 28),
             const SizedBox(height: 4),
             Text(
               label,
               style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
                 color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -555,57 +620,22 @@ class _QuickActionButton extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
   final String title;
-  final List<Widget> children;
-  final Color headerColor;
-
-  const _SectionCard({
-    required this.title,
-    required this.children,
-    required this.headerColor,
-  });
+  const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: MiTema.blanco,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(158, 158, 158, 0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: headerColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(14),
-                topRight: Radius.circular(14),
-              ),
-            ),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: MiTema.crema,
-              ),
-            ),
-          ),
-          ...children,
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -631,21 +661,33 @@ class _SettingsTile extends StatelessWidget {
     return Column(
       children: [
         ListTile(
-          leading: Icon(icon, color: MiTema.azul),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 4,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: MiTema.celeste.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              // shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: MiTema.celeste, size: 22),
+          ),
           title: Text(
             title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           ),
           trailing:
-              trailing ?? Icon(Icons.chevron_right, color: Colors.grey[400]),
+              trailing ??
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: Colors.grey[400],
+              ),
           onTap: onTap,
-          visualDensity: const VisualDensity(vertical: -1),
         ),
-        if (showDivider)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Divider(color: Colors.grey.shade200),
-          ),
+        if (showDivider) Divider(color: Colors.grey[100], indent: 70),
       ],
     );
   }

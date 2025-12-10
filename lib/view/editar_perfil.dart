@@ -5,9 +5,10 @@ import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/services/storage_service.dart';
 import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
-import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
 
 class EditarPerfilScreen extends StatefulWidget {
   const EditarPerfilScreen({super.key});
@@ -42,15 +43,12 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         if (mounted) {
           setState(() {
             _nombreController.text = user['nombre'] ?? '';
-            // No cargamos la contraseña por seguridad
-            _fotoActualUrl =
-                user['foto_perfil']; // Asumiendo campo 'foto_perfil'
+            _fotoActualUrl = user['foto_perfil'];
             _cargando = false;
           });
         }
       }
     } catch (e) {
-      print('Error cargando perfil: $e');
       if (mounted) setState(() => _cargando = false);
     }
   }
@@ -77,7 +75,6 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     try {
       String? nuevaUrlFoto;
 
-      // 1. Subir foto si hay nueva
       if (_nuevaFoto != null) {
         nuevaUrlFoto = await _storageService.uploadProfilePhoto(
           userId: uid.toString(),
@@ -85,7 +82,6 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         );
       }
 
-      // 2. Preparar datos
       final Map<String, dynamic> datos = {
         'nombre': _nombreController.text.trim(),
       };
@@ -95,14 +91,10 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
       }
 
       if (_passwordController.text.isNotEmpty) {
-        datos['password'] =
-            _passwordController.text; // En texto plano por simplicidad actual
+        datos['password'] = _passwordController.text;
       }
 
-      // 3. Guardar en BD
       await BaseDatos.actualizarUsuario(uid, datos);
-
-      // 4. Actualizar sesión local
       SesionActual.nombre = datos['nombre'];
 
       if (!mounted) return;
@@ -112,16 +104,13 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         context,
         message: '¡Perfil actualizado!',
         onComplete: () {
-          Navigator.pop(context, true); // Retorna true si hubo cambios
+          Navigator.pop(context, true);
         },
       );
     } catch (e) {
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
-      await LottieFeedback.showError(
-        context,
-        message: 'Error al actualizar: $e',
-      );
+      await LottieFeedback.showError(context, message: 'Error: $e');
     }
   }
 
@@ -129,121 +118,136 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   Widget build(BuildContext context) {
     if (_cargando) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF5F7FA),
         body: Center(child: CircularProgressIndicator(color: MiTema.celeste)),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-        title: Text('Editar Perfil', style: TextStyle(color: MiTema.crema)),
-        backgroundColor: MiTema.azul,
-        iconTheme: IconThemeData(color: MiTema.crema),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppGradients.primaryGradient,
+          ),
+        ),
+        title: const Text(
+          'Editar Perfil',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Foto de perfil
-              GestureDetector(
-                onTap: _seleccionarFoto,
-                child: Stack(
-                  alignment: Alignment.bottomRight,
+        child: Column(
+          children: [
+            StunningCard(
+              child: Form(
+                key: _formKey,
+                child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: _nuevaFoto != null
-                          ? FileImage(_nuevaFoto!)
-                          : (_fotoActualUrl != null
-                                ? NetworkImage(_fotoActualUrl!) as ImageProvider
-                                : null),
-                      child: (_nuevaFoto == null && _fotoActualUrl == null)
-                          ? Icon(Icons.person, size: 60, color: Colors.grey)
-                          : null,
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _seleccionarFoto,
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: MiTema.celeste.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 60,
+                              backgroundColor: Colors.grey[100],
+                              backgroundImage: _nuevaFoto != null
+                                  ? FileImage(_nuevaFoto!)
+                                  : (_fotoActualUrl != null &&
+                                            _fotoActualUrl!.isNotEmpty
+                                        ? NetworkImage(_fotoActualUrl!)
+                                              as ImageProvider
+                                        : null),
+                              child:
+                                  (_nuevaFoto == null &&
+                                      (_fotoActualUrl == null ||
+                                          _fotoActualUrl!.isEmpty))
+                                  ? Icon(
+                                      Icons.person_rounded,
+                                      size: 60,
+                                      color: Colors.grey[400],
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: MiTema.celeste,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: MiTema.celeste,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Tu Información',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
                       ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Nombre
+                    StunningTextField(
+                      controller: _nombreController,
+                      label: 'Nombre completo',
+                      icon: Icons.person_outline_rounded,
+                      validator: (v) => v!.isEmpty ? 'Ingresa tu nombre' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Contraseña
+                    StunningTextField(
+                      controller: _passwordController,
+                      label: 'Nueva contraseña (opcional)',
+                      icon: Icons.lock_outline_rounded,
+                      isPassword: true,
+                    ),
+                    const SizedBox(height: 40),
+
+                    StunningButton(
+                      onPressed: _guardarCambios,
+                      text: 'GUARDAR CAMBIOS',
+                      icon: Icons.save_rounded,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 30),
-
-              // Nombre
-              TextFormField(
-                controller: _nombreController,
-                decoration: InputDecoration(
-                  labelText: 'Nombre completo',
-                  prefixIcon: Icon(Icons.person_outline, color: MiTema.azul),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                ),
-                validator: (v) => v!.isEmpty ? 'Ingresa tu nombre' : null,
-              ),
-              const SizedBox(height: 20),
-
-              // Contraseña
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Nueva contraseña (opcional)',
-                  helperText: 'Deja en blanco para no cambiarla',
-                  prefixIcon: Icon(Icons.lock_outline, color: MiTema.azul),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // Botón Guardar
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _guardarCambios,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: MiTema.celeste,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Guardar cambios',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

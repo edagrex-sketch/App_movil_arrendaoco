@@ -9,6 +9,12 @@ class MiTema {
   static Color celeste = const Color.fromARGB(255, 102, 155, 188);
   static Color blanco = const Color.fromARGB(255, 255, 255, 255);
   static Color negro = const Color.fromARGB(255, 0, 0, 0);
+  static Color verde = const Color.fromARGB(
+    255,
+    46,
+    125,
+    50,
+  ); // Verde estándar elegante
 
   static ThemeData temaApp(BuildContext context) {
     return ThemeData(
