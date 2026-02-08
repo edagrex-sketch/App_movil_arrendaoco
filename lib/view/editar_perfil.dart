@@ -17,7 +17,8 @@ class EditarPerfilScreen extends StatefulWidget {
   State<EditarPerfilScreen> createState() => _EditarPerfilScreenState();
 }
 
-class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
+class _EditarPerfilScreenState extends State<EditarPerfilScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -27,10 +28,35 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   String? _fotoActualUrl;
   bool _cargando = true;
 
+  late AnimationController _entryController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
   @override
   void initState() {
     super.initState();
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOut));
+
     _cargarDatos();
+  }
+
+  @override
+  void dispose() {
+    _entryController.dispose();
+    _nombreController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarDatos() async {
@@ -46,6 +72,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
             _fotoActualUrl = user['foto_perfil'];
             _cargando = false;
           });
+          _entryController.forward();
         }
       }
     } catch (e) {
@@ -140,114 +167,137 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            StunningCard(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: _seleccionarFoto,
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: MiTema.celeste.withOpacity(0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: CircleAvatar(
-                              radius: 60,
-                              backgroundColor: Colors.grey[100],
-                              backgroundImage: _nuevaFoto != null
-                                  ? FileImage(_nuevaFoto!)
-                                  : (_fotoActualUrl != null &&
-                                            _fotoActualUrl!.isNotEmpty
-                                        ? NetworkImage(_fotoActualUrl!)
-                                              as ImageProvider
-                                        : null),
-                              child:
-                                  (_nuevaFoto == null &&
-                                      (_fotoActualUrl == null ||
-                                          _fotoActualUrl!.isEmpty))
-                                  ? Icon(
-                                      Icons.person_rounded,
-                                      size: 60,
-                                      color: Colors.grey[400],
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: MiTema.celeste,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                StunningCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          onTap: _seleccionarFoto,
+                          child: Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: MiTema.celeste.withOpacity(0.5),
+                                    width: 2,
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                                child: CircleAvatar(
+                                  radius: 60,
+                                  backgroundColor: Colors.grey[100],
+                                  backgroundImage: _nuevaFoto != null
+                                      ? FileImage(_nuevaFoto!)
+                                      : (_fotoActualUrl != null &&
+                                                _fotoActualUrl!.isNotEmpty
+                                            ? NetworkImage(_fotoActualUrl!)
+                                                  as ImageProvider
+                                            : null),
+                                  child:
+                                      (_nuevaFoto == null &&
+                                          (_fotoActualUrl == null ||
+                                              _fotoActualUrl!.isEmpty))
+                                      ? Icon(
+                                          Icons.person_rounded,
+                                          size: 60,
+                                          color: Colors.grey[400],
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: MiTema.celeste,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Tu Información',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: MiTema.azul,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Tu Información',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: MiTema.azul,
+                          ),
+                        ),
+                        const SizedBox(height: 30),
 
-                    // Nombre
-                    StunningTextField(
-                      controller: _nombreController,
-                      label: 'Nombre completo',
-                      icon: Icons.person_outline_rounded,
-                      validator: (v) => v!.isEmpty ? 'Ingresa tu nombre' : null,
-                    ),
-                    const SizedBox(height: 20),
+                        // Nombre
+                        StunningTextField(
+                          controller: _nombreController,
+                          label: 'Nombre completo',
+                          icon: Icons.person_outline_rounded,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Ingresa tu nombre';
+                            }
+                            if (v.trim().length < 3) {
+                              return 'Mínimo 3 caracteres';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 20),
 
-                    // Contraseña
-                    StunningTextField(
-                      controller: _passwordController,
-                      label: 'Nueva contraseña (opcional)',
-                      icon: Icons.lock_outline_rounded,
-                      isPassword: true,
-                    ),
-                    const SizedBox(height: 40),
+                        // Contraseña
+                        StunningTextField(
+                          controller: _passwordController,
+                          label: 'Nueva contraseña (opcional)',
+                          icon: Icons.lock_outline_rounded,
+                          isPassword: true,
+                          validator: (v) {
+                            if (v != null && v.isNotEmpty && v.length < 6) {
+                              return 'Mínimo 6 caracteres';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 40),
 
-                    StunningButton(
-                      onPressed: _guardarCambios,
-                      text: 'GUARDAR CAMBIOS',
-                      icon: Icons.save_rounded,
+                        StunningButton(
+                          onPressed: _guardarCambios,
+                          text: 'GUARDAR CAMBIOS',
+                          icon: Icons.save_rounded,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

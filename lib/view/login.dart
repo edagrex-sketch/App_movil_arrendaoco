@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
@@ -10,6 +11,7 @@ import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:arrendaoco/theme/arrenda_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,34 +20,16 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => LoginScreenState();
 }
 
-class LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
 
-  late AnimationController _entryController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-
   @override
   void initState() {
     super.initState();
-    _entryController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _entryController,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOut));
-
-    _entryController.forward();
+    // No animations controller init needed
   }
 
   Future<void> login() async {
@@ -73,7 +57,13 @@ class LoginScreenState extends State<LoginScreen>
         SesionActual.usuarioId = user.uid;
         SesionActual.nombre = userData['nombre'] ?? '';
         SesionActual.email = userData['email'] ?? '';
-        SesionActual.rol = userData['rol'] ?? 'Inquilino';
+        String roleFromDb = (userData['rol'] as String?) ?? 'Inquilino';
+        if (roleFromDb.isNotEmpty) {
+          roleFromDb =
+              roleFromDb[0].toUpperCase() +
+              roleFromDb.substring(1).toLowerCase();
+        }
+        SesionActual.rol = roleFromDb;
         SesionActual.publicId = userData['public_id'];
 
         if (SesionActual.rol == 'Arrendador') {
@@ -84,9 +74,7 @@ class LoginScreenState extends State<LoginScreen>
 
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => ArrendadorScreen(usuarioId: user.uid),
-            ),
+            StunningPageRoute(page: ArrendadorScreen(usuarioId: user.uid)),
           );
         } else {
           if (SesionActual.usuarioId != null) {
@@ -96,9 +84,7 @@ class LoginScreenState extends State<LoginScreen>
 
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => InquilinoHomeScreen(usuarioId: user.uid),
-            ),
+            StunningPageRoute(page: InquilinoHomeScreen(usuarioId: user.uid)),
           );
         }
       } else {
@@ -155,31 +141,27 @@ class LoginScreenState extends State<LoginScreen>
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
-    _entryController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: ArrendaColors.background,
       body: Container(
         decoration: const BoxDecoration(gradient: AppGradients.surfaceGradient),
         child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Logo with subtle glow or shadow effect
-                        // Logo
-                        Container(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo with subtle glow or shadow effect
+                    // Logo
+                    Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             // Eliminamos shape circular para ver el logo completo
@@ -187,7 +169,7 @@ class LoginScreenState extends State<LoginScreen>
                             // box shadow opcional, lo mantenemos sutil
                           ),
                           child: Image.asset(
-                            'assets/images/logo.png',
+                            'assets/icon/logo.png',
                             height: 120,
                             fit: BoxFit.contain, // Asegura que se vea completo
                             errorBuilder: (ctx, err, stack) => Icon(
@@ -196,10 +178,19 @@ class LoginScreenState extends State<LoginScreen>
                               color: MiTema.azul,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 30),
+                        )
+                        .animate()
+                        .rotate(
+                          begin: -0.5,
+                          end: 0,
+                          duration: 800.ms,
+                          curve: Curves.easeOutBack,
+                        ) // Swing in
+                        .scale(begin: const Offset(0.5, 0.5), duration: 800.ms)
+                        .fadeIn(duration: 500.ms),
+                    const SizedBox(height: 30),
 
-                        StunningCard(
+                    StunningCard(
                           child: Form(
                             key: formKey,
                             child: Column(
@@ -277,63 +268,42 @@ class LoginScreenState extends State<LoginScreen>
                               ],
                             ),
                           ),
-                        ),
+                        )
+                        .animate()
+                        .fadeIn(delay: 300.ms, duration: 600.ms)
+                        .slideY(begin: 0.2, curve: Curves.easeOutCubic)
+                        .blurXY(begin: 10, end: 0), // Blur shift
 
-                        const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              PageRouteBuilder(
-                                pageBuilder:
-                                    (context, animation, secondaryAnimation) =>
-                                        const SeleccionarRolScreen(),
-                                transitionsBuilder:
-                                    (
-                                      context,
-                                      animation,
-                                      secondaryAnimation,
-                                      child,
-                                    ) {
-                                      const begin = Offset(1.0, 0.0);
-                                      const end = Offset.zero;
-                                      const curve = Curves.easeInOut;
-                                      var tween = Tween(
-                                        begin: begin,
-                                        end: end,
-                                      ).chain(CurveTween(curve: curve));
-                                      return SlideTransition(
-                                        position: animation.drive(tween),
-                                        child: child,
-                                      );
-                                    },
-                              ),
-                            );
-                          },
-                          child: RichText(
-                            text: TextSpan(
-                              text: '¿No tienes cuenta? ',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: 'Regístrate',
-                                  style: TextStyle(
-                                    color: MiTema.vino,
-                                    fontWeight: FontWeight.bold,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                ),
-                              ],
-                            ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          StunningPageRoute(page: const SeleccionarRolScreen()),
+                        );
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          text: '¿No tienes cuenta? ',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
                           ),
+                          children: [
+                            TextSpan(
+                              text: 'Regístrate',
+                              style: TextStyle(
+                                color: MiTema.vino,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2),
+                  ],
                 ),
               ),
             ),

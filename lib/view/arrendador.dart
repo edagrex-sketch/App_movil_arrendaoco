@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
 import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/perfil.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/model/bd.dart';
-import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,10 +29,9 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
   @override
   void initState() {
     super.initState();
-    // Iniciar escucha de notificaciones en tiempo real
     final uid = int.tryParse(widget.usuarioId) ?? 0;
     if (uid > 0) {
-      NotificacionesService.escucharNotificaciones(uid);
+      FCMService.initialize(uid);
     }
   }
 
@@ -44,12 +44,25 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: ArrendaColors.background,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            color: Colors.white,
+          ),
+        ),
+        leadingWidth: 56,
         title: const Text(
           'ArrendaOco',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 20,
+          ),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -71,7 +84,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                 gradient: AppGradients.accentGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: MiTema.vino.withOpacity(0.4),
+                    color: ArrendaColors.error.withOpacity(0.4),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -117,23 +130,32 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
         ),
         child: NavigationBar(
           backgroundColor: Colors.transparent,
-          indicatorColor: MiTema.celeste.withOpacity(0.15),
+          indicatorColor: ArrendaColors.accent.withOpacity(0.15),
           selectedIndex: currentIndex,
           onDestinationSelected: (i) => setState(() => currentIndex = i),
           destinations: [
             NavigationDestination(
               icon: Icon(Icons.home_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(Icons.home_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.home_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Mis Propiedades',
             ),
             NavigationDestination(
               icon: Icon(Icons.search_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(Icons.search_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.search_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Explorar',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline, color: Colors.grey[600]),
-              selectedIcon: Icon(Icons.person_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.person_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Perfil',
             ),
           ],
@@ -174,7 +196,7 @@ class InicioFeedState extends State<InicioFeed> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
-            child: CircularProgressIndicator(color: MiTema.celeste),
+            child: CircularProgressIndicator(color: ArrendaColors.accent),
           );
         }
 
@@ -293,10 +315,10 @@ class InicioFeedState extends State<InicioFeed> {
                             Expanded(
                               child: Text(
                                 titulo.toString(),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: MiTema.azul,
+                                  color: ArrendaColors.primary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -304,10 +326,10 @@ class InicioFeedState extends State<InicioFeed> {
                             ),
                             Text(
                               '\$${precio.toStringAsFixed(0)}',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
-                                color: MiTema.vino,
+                                color: ArrendaColors.error,
                               ),
                             ),
                           ],
@@ -341,15 +363,15 @@ class InicioFeedState extends State<InicioFeed> {
                                   ),
                                 );
                               },
-                              icon: Icon(
+                              icon: const Icon(
                                 Icons.edit_rounded,
                                 size: 20,
-                                color: MiTema.celeste,
+                                color: ArrendaColors.accent,
                               ),
-                              label: Text(
+                              label: const Text(
                                 'Editar',
                                 style: TextStyle(
-                                  color: MiTema.celeste,
+                                  color: ArrendaColors.accent,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -369,9 +391,11 @@ class InicioFeedState extends State<InicioFeed> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
-                                    title: Text(
+                                    title: const Text(
                                       'Eliminar propiedad',
-                                      style: TextStyle(color: MiTema.azul),
+                                      style: TextStyle(
+                                        color: ArrendaColors.primary,
+                                      ),
                                     ),
                                     content: const Text(
                                       '¿Estás seguro? Esta acción no se puede deshacer.',
@@ -385,9 +409,11 @@ class InicioFeedState extends State<InicioFeed> {
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(ctx, true),
-                                        child: Text(
+                                        child: const Text(
                                           'Eliminar',
-                                          style: TextStyle(color: MiTema.rojo),
+                                          style: TextStyle(
+                                            color: ArrendaColors.error,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -398,7 +424,6 @@ class InicioFeedState extends State<InicioFeed> {
                                   await BaseDatos.eliminarInmueble(
                                     i['id'] as int,
                                   );
-                                  // Stream updates automatically
                                 }
                               },
                               icon: const Icon(

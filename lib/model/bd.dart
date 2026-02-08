@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 class BaseDatos {
   static final _supabase = Supabase.instance.client;
@@ -99,7 +100,7 @@ class BaseDatos {
       return response['id'] as int;
     } on PostgrestException catch (e) {
       if (resena.containsKey('usuario_id')) {
-        print(
+        debugPrint(
           '⚠️ Error insertando reseña: ${e.message}. Reintentando sin usuario_id.',
         );
         final copia = Map<String, dynamic>.from(resena);
@@ -125,7 +126,7 @@ class BaseDatos {
           .maybeSingle();
       return response;
     } catch (e) {
-      print('Error buscando reseña $id: $e');
+      debugPrint('Error buscando reseña $id: $e');
       return null;
     }
   }
@@ -306,6 +307,34 @@ class BaseDatos {
     return response['id'] as int;
   }
 
+  static Future<void> actualizarEstadoRenta(int id, String estado) async {
+    await _supabase.from('rentas').update({'estado': estado}).eq('id', id);
+  }
+
+  static Future<void> eliminarTodasLasRentas(int usuarioId) async {
+    // 1. Obtener rentas del usuario (ya sea arrendador o inquilino) para borrar sus dependencias
+    final response = await _supabase
+        .from('rentas')
+        .select('id')
+        .or('arrendador_id.eq.$usuarioId,inquilino_id.eq.$usuarioId');
+
+    final rentas = List<Map<String, dynamic>>.from(response);
+
+    for (var r in rentas) {
+      final rId = r['id'];
+      // Borrar pagos
+      await _supabase.from('pagos_renta').delete().eq('renta_id', rId);
+      // Borrar eventos
+      await _supabase.from('calendario').delete().eq('renta_id', rId);
+    }
+
+    // 2. Borrar las rentas
+    await _supabase
+        .from('rentas')
+        .delete()
+        .or('arrendador_id.eq.$usuarioId,inquilino_id.eq.$usuarioId');
+  }
+
   static Future<List<Map<String, dynamic>>> obtenerRentasPorArrendador(
     int arrendadorId,
   ) async {
@@ -410,28 +439,9 @@ class BaseDatos {
         'fecha_pago': fechaPago.toIso8601String(),
         'monto': monto,
         'estado': 'pendiente',
-        'mes_correspondiente': _getNombreMes(fechaPago.month),
       });
     }
     await _supabase.from('pagos_renta').insert(pagos);
-  }
-
-  static String _getNombreMes(int mes) {
-    const meses = [
-      'Enero',
-      'Febrero',
-      'Marzo',
-      'Abril',
-      'Mayo',
-      'Junio',
-      'Julio',
-      'Agosto',
-      'Septiembre',
-      'Octubre',
-      'Noviembre',
-      'Diciembre',
-    ];
-    return meses[mes - 1];
   }
 
   static Future<List<Map<String, dynamic>>> obtenerPagosDeRenta(
@@ -489,7 +499,7 @@ class BaseDatos {
     } catch (e) {
       // Si falla, intentamos sin referencia_id por si hay un error de schema/FK
       if (referenciaId != null) {
-        print(
+        debugPrint(
           '⚠️ Error al crear notificación con ref: $e. Reintentando sin ref.',
         );
         data.remove('referencia_id');
@@ -500,7 +510,8 @@ class BaseDatos {
             .single();
         return response['id'] as int;
       }
-      rethrow;
+      debugPrint('Error creando notificación: $e');
+      return 0; // Return 0 to indicate failure but don't crash the flow
     }
   }
 
@@ -543,5 +554,52 @@ class BaseDatos {
         .update({'leida': 1})
         .eq('usuario_id', usuarioId);
     return 1;
+  }
+
+  static Future<List<Map<String, dynamic>>> obtenerPagosPendientes(
+    int usuarioId,
+    String rol,
+  ) async {
+    String campoId = rol == 'Arrendador' ? 'arrendador_id' : 'inquilino_id';
+
+    final res = await _supabase
+        .from('rentas')
+        .select('id')
+        .eq(campoId, usuarioId);
+
+    final rentasIds = (res as List).map((e) => e['id']).toList();
+
+    if (rentasIds.isEmpty) return [];
+
+    final pagos = await _supabase
+        .from('pagos_renta')
+        .select('*, rentas(inmuebles(titulo))')
+        .filter('renta_id', 'in', rentasIds)
+        .eq('estado', 'pendiente')
+        .order('fecha_pago');
+
+    return List<Map<String, dynamic>>.from(
+      pagos.map((p) {
+        String tituloInmueble = 'Inmueble';
+        try {
+          // ignore: unnecessary_null_comparison
+          if (p['rentas'] != null && p['rentas']['inmuebles'] != null) {
+            tituloInmueble = p['rentas']['inmuebles']['titulo'] ?? 'Inmueble';
+          }
+        } catch (_) {}
+
+        return {
+          'id':
+              -1 *
+              (p['id']
+                  as int), // ID negativo para diferenciar de eventos normales
+          'titulo': 'Próximo Pago',
+          'descripcion': '\$${p['monto']} - $tituloInmueble',
+          'fecha': p['fecha_pago'],
+          'tipo': 'pago',
+          'original_id': p['id'],
+        };
+      }),
+    );
   }
 }

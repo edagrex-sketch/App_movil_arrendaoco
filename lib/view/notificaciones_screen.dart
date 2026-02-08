@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:lottie/lottie.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
 
 class NotificacionesScreen extends StatefulWidget {
@@ -13,14 +15,26 @@ class NotificacionesScreen extends StatefulWidget {
   State<NotificacionesScreen> createState() => _NotificacionesScreenState();
 }
 
-class _NotificacionesScreenState extends State<NotificacionesScreen> {
+class _NotificacionesScreenState extends State<NotificacionesScreen>
+    with SingleTickerProviderStateMixin {
   bool _cargando = true;
   List<Map<String, dynamic>> _notificaciones = [];
+  late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _cargarNotificaciones();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarNotificaciones() async {
@@ -31,6 +45,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
         setState(() {
           _notificaciones = data;
           _cargando = false;
+          _controller.forward(from: 0);
         });
         _marcarTodasComoLeidas();
       }
@@ -171,14 +186,19 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppGradients.primaryGradient,
+          ),
+        ),
         title: const Text(
           'Notificaciones',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const BackButton(color: Colors.black),
+        leading: const BackButton(color: Colors.white),
       ),
       body: _cargando
           ? Center(child: CircularProgressIndicator(color: MiTema.celeste))
@@ -187,19 +207,32 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.notifications_off_outlined,
-                    size: 80,
-                    color: Colors.grey[300],
+                  Lottie.asset(
+                    'assets/animations/empty.json',
+                    width: 250,
+                    height: 250,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.notifications_off_outlined,
+                        size: 80,
+                        color: Colors.grey[300],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No tienes notificaciones',
+                    'Estás al día',
                     style: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: MiTema.azul,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No tienes nuevas notificaciones',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 16),
                   ),
                 ],
               ),
@@ -232,74 +265,110 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                   iconColor = MiTema.vino;
                 }
 
-                return Dismissible(
-                  key: Key(notif['id'].toString()),
-                  direction: DismissDirection.endToStart,
-                  onDismissed: (_) => _eliminarNotificacion(notif['id']),
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.red[100],
-                      borderRadius: BorderRadius.circular(16),
+                // Animated List Item
+                final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+                  CurvedAnimation(
+                    parent: _controller,
+                    curve: Interval(
+                      (1 / _notificaciones.length) * index,
+                      1.0,
+                      curve: Curves.easeOutQuart,
                     ),
-                    child: Icon(Icons.delete_outline, color: Colors.red[700]),
                   ),
-                  child: StunningCard(
-                    padding: EdgeInsets.zero,
-                    child: InkWell(
-                      onTap: () => _manejarTapNotificacion(notif),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: iconColor.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(iconData, color: iconColor, size: 24),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                );
+
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.2, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: Dismissible(
+                      key: Key(notif['id'].toString()),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (_) => _eliminarNotificacion(notif['id']),
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.red[100],
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red[700],
+                        ),
+                      ),
+                      child: StunningCard(
+                        padding: EdgeInsets.zero,
+                        child: InkWell(
+                          onTap: () => _manejarTapNotificacion(notif),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: iconColor.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    iconData,
+                                    color: iconColor,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        titulo,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              titulo,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatDate(fecha),
+                                            style: TextStyle(
+                                              color: Colors.grey[400],
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                      const SizedBox(height: 4),
                                       Text(
-                                        _formatDate(fecha),
+                                        mensaje,
                                         style: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                          height: 1.4,
+                                          fontSize: 13,
                                         ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    mensaje,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),

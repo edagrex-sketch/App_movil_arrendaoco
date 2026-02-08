@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/favoritos.dart';
 import 'package:arrendaoco/view/perfil.dart';
-
-import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/view/mis_rentas.dart';
+import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
@@ -20,13 +21,19 @@ class InquilinoHomeScreen extends StatefulWidget {
 class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   int _currentIndex = 0;
 
+  final List<String> _titulos = [
+    'Explorar',
+    'Mis Rentas',
+    'Mis Favoritos',
+    'Mi Perfil',
+  ];
+
   @override
   void initState() {
     super.initState();
-    // Iniciar escucha de notificaciones en tiempo real
     final uid = int.tryParse(widget.usuarioId) ?? 0;
     if (uid > 0) {
-      NotificacionesService.escucharNotificaciones(uid);
+      FCMService.initialize(uid);
     }
   }
 
@@ -34,17 +41,31 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   Widget build(BuildContext context) {
     final pages = [
       const ExplorarScreen(),
+      const MisRentasScreen(),
       const FavoritosScreen(),
       const PerfilScreen(),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
+      backgroundColor: ArrendaColors.background,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text(
-          'ArrendaOco',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            color: Colors.white,
+          ),
+        ),
+        leadingWidth: 56,
+        title: Text(
+          _titulos[_currentIndex],
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 20,
+          ),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -73,7 +94,7 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
         ),
         child: NavigationBar(
           backgroundColor: Colors.transparent,
-          indicatorColor: MiTema.celeste.withOpacity(0.15),
+          indicatorColor: ArrendaColors.accent.withOpacity(0.15),
           elevation: 0,
           selectedIndex: _currentIndex,
           onDestinationSelected: (i) {
@@ -84,20 +105,37 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
           destinations: [
             NavigationDestination(
               icon: Icon(Icons.search_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(Icons.search_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.search_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Explorar',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined, color: Colors.grey[600]),
+              selectedIcon: Icon(
+                Icons.receipt_long_rounded,
+                color: ArrendaColors.primary,
+              ),
+              label: 'Mis Rentas',
             ),
             NavigationDestination(
               icon: Icon(
                 Icons.favorite_border_rounded,
                 color: Colors.grey[600],
               ),
-              selectedIcon: Icon(Icons.favorite_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.favorite_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Favoritos',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline_rounded, color: Colors.grey[600]),
-              selectedIcon: Icon(Icons.person_rounded, color: MiTema.azul),
+              selectedIcon: Icon(
+                Icons.person_rounded,
+                color: ArrendaColors.primary,
+              ),
               label: 'Perfil',
             ),
           ],

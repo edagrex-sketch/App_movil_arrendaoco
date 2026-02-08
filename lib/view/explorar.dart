@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/services.dart';
+import 'package:easy_debounce/easy_debounce.dart';
+import 'package:lottie/lottie.dart';
+
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
@@ -58,303 +63,361 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _inmueblesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: MiTema.celeste),
-          );
-        }
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error al cargar inmuebles'));
-        }
-
-        final todos = snapshot.data ?? [];
-        final inmuebles = _aplicarFiltros(todos);
-
-        return Container(
-          color: const Color(0xFFF5F7FA), // Light background
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // HEADER with Search and Chips
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    bottom: Radius.circular(24),
+    return Container(
+      color: const Color(0xFFF5F7FA), // Light background
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // HEADER with Search and Chips (STATIC)
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.only(
+              left: 20,
+              right: 20,
+              bottom: 20,
+              top: 10,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                StunningSearchBar(
+                  onChanged: (value) {
+                    EasyDebounce.debounce(
+                      'search-debouncer', // ID único para cancelar búsquedas anteriores
+                      const Duration(
+                        milliseconds: 500,
+                      ), // Espera 500ms al dejar de escribir
+                      () {
+                        if (mounted) {
+                          setState(() {
+                            _busqueda = value.trim();
+                          });
+                        }
+                      },
+                    );
+                  },
+                  hintText: '¿Qué estás buscando hoy?',
+                ),
+                const SizedBox(height: 20),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _categorias.map((cat) {
+                      final seleccionado = _categoriaSeleccionada == cat;
+                      return StunningChip(
+                        label: cat,
+                        selected: seleccionado,
+                        onSelected: (val) {
+                          setState(() {
+                            _categoriaSeleccionada = val ? cat : null;
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
                 ),
-                padding: const EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  bottom: 20,
-                  top: 10,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    StunningSearchBar(
-                      onChanged: (value) =>
-                          setState(() => _busqueda = value.trim()),
-                      hintText: '¿Qué estás buscando hoy?',
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              'Inmuebles Destacados',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: MiTema.azul,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // LIST (DYNAMIC)
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _inmueblesStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  // SHIMMER / SKELETON LOADING
+                  return ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
                     ),
-                    const SizedBox(height: 20),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _categorias.map((cat) {
-                          final seleccionado = _categoriaSeleccionada == cat;
-                          return StunningChip(
-                            label: cat,
-                            selected: seleccionado,
-                            onSelected: (val) {
-                              setState(() {
-                                _categoriaSeleccionada = val ? cat : null;
-                              });
+                    itemCount: 4,
+                    separatorBuilder: (ctx, i) => const SizedBox(height: 20),
+                    itemBuilder: (ctx, i) => const StunningShimmerCard(),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Error al cargar inmuebles'));
+                }
+
+                final todos = snapshot.data ?? [];
+                final inmuebles = _aplicarFiltros(todos);
+
+                if (inmuebles.isEmpty) {
+                  return Center(
+                    child: SingleChildScrollView(
+                      // Para evitar overflow si el teclado está abierto
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Lottie.asset(
+                            'assets/animations/empty.json', // Asegúrate de tener este archivo o usa loading.json provisionalmente
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.search_off_rounded,
+                                size: 80,
+                                color: Colors.grey[300],
+                              );
                             },
-                          );
-                        }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No encontramos resultados',
+                            style: TextStyle(
+                              color: MiTema.azul,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Intenta con otra búsqueda o categoría',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  );
+                }
 
-              const SizedBox(height: 20),
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(() {
+                      // Recarga forzada del stream (o simplemente setState para reconstruir)
+                      _inmueblesStream = Supabase.instance.client
+                          .from('inmuebles')
+                          .stream(primaryKey: ['id'])
+                          .order('id', ascending: false);
+                    });
+                    // Pequeña espera para que se sienta la recarga
+                    await Future.delayed(const Duration(milliseconds: 800));
+                  },
+                  color: MiTema.celeste,
+                  backgroundColor: Colors.white,
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    itemCount: inmuebles.length,
+                    separatorBuilder: (ctx, i) => const SizedBox(height: 20),
+                    itemBuilder: (context, index) {
+                      final i = inmuebles[index];
+                      final titulo = i['titulo'] ?? '';
+                      final descripcion = i['descripcion'] ?? '';
+                      final precio = i['precio'] ?? 0;
+                      final categoria = i['categoria'] ?? '';
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  'Inmuebles Destacados',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: MiTema.azul,
-                  ),
-                ),
-              ),
+                      final rutasRaw = i['rutas_imagen'] as String? ?? '';
+                      final rutas = rutasRaw.isEmpty ? [] : rutasRaw.split(',');
+                      final primeraRuta = rutas.isNotEmpty ? rutas.first : null;
 
-              const SizedBox(height: 10),
+                      final camas = i['camas'] ?? 1;
+                      final banos = i['banos'] ?? 1;
+                      final tamano = i['tamano'] ?? 'Pequeño';
 
-              // LIST
-              Expanded(
-                child: inmuebles.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search_off_rounded,
-                              size: 60,
-                              color: Colors.grey[300],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No encontramos resultados',
-                              style: TextStyle(color: Colors.grey[500]),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                        itemCount: inmuebles.length,
-                        separatorBuilder: (ctx, i) =>
-                            const SizedBox(height: 20),
-                        itemBuilder: (context, index) {
-                          final i = inmuebles[index];
-                          final titulo = i['titulo'] ?? '';
-                          final descripcion = i['descripcion'] ?? '';
-                          final precio = i['precio'] ?? 0;
-                          final categoria = i['categoria'] ?? '';
+                      final direccionCorta = descripcion
+                          .toString()
+                          .split('\n')
+                          .first;
 
-                          final rutasRaw = i['rutas_imagen'] as String? ?? '';
-                          final rutas = rutasRaw.isEmpty
-                              ? []
-                              : rutasRaw.split(',');
-                          final primeraRuta = rutas.isNotEmpty
-                              ? rutas.first
-                              : null;
-
-                          final camas = i['camas'] ?? 1;
-                          final banos = i['banos'] ?? 1;
-                          final tamano = i['tamano'] ?? 'Pequeño';
-
-                          final direccionCorta = descripcion
-                              .toString()
-                              .split('\n')
-                              .first;
-
-                          return _FadeInUpItem(
-                            index: index,
-                            child: StunningCard(
-                              padding: EdgeInsets.zero,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => DetalleInmuebleScreen(
-                                      inmueble: i,
-                                      usuarioId: SesionActual.usuarioId,
-                                    ),
+                      return StunningCard(
+                            padding: EdgeInsets.zero,
+                            onTap: () {
+                              HapticFeedback.lightImpact(); // FEEDBACK HÁPTICO
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DetalleInmuebleScreen(
+                                    inmueble: i,
+                                    usuarioId: SesionActual.usuarioId,
                                   ),
-                                );
-                              },
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Stack(
-                                    children: [
-                                      Hero(
-                                        tag: 'img_${i['id']}',
-                                        child: Container(
-                                          height: 220,
-                                          width: double.infinity,
-                                          color: Colors.grey[200],
-                                          child: primeraRuta != null
-                                              ? ImagenDinamica(
-                                                  ruta: primeraRuta,
-                                                  height: 220,
-                                                  width: double.infinity,
-                                                  fit: BoxFit.cover,
-                                                )
-                                              : Icon(
-                                                  Icons.broken_image,
-                                                  color: Colors.grey[400],
-                                                ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 12,
-                                        left: 12,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(
-                                              0.9,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            categoria,
-                                            style: TextStyle(
-                                              color: MiTema.azul,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (SesionActual.usuarioId != null)
-                                        Positioned(
-                                          top: 10,
-                                          right: 10,
-                                          child: _FavoriteButton(
-                                            inmuebleId: i['id'],
-                                            usuarioId: SesionActual.usuarioId!,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                titulo.toString(),
-                                                style: TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: MiTema.azul,
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Stack(
+                                  children: [
+                                    Hero(
+                                      tag: 'img_${i['id']}',
+                                      child: Container(
+                                        height: 220,
+                                        width: double.infinity,
+                                        color: Colors.grey[200],
+                                        child: primeraRuta != null
+                                            ? ImagenDinamica(
+                                                ruta: primeraRuta,
+                                                height: 220,
+                                                width: double.infinity,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Icon(
+                                                Icons.broken_image,
+                                                color: Colors.grey[400],
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '\$${precio.toStringAsFixed(0)}',
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 12,
+                                      left: 12,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.9),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          categoria,
+                                          style: TextStyle(
+                                            color: MiTema.azul,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (SesionActual.usuarioId != null)
+                                      Positioned(
+                                        top: 10,
+                                        right: 10,
+                                        child: _FavoriteButton(
+                                          inmuebleId: i['id'],
+                                          usuarioId: SesionActual.usuarioId!,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              titulo.toString(),
                                               style: TextStyle(
                                                 fontSize: 18,
-                                                fontWeight: FontWeight.w900,
-                                                color: MiTema.vino,
+                                                fontWeight: FontWeight.w700,
+                                                color: MiTema.azul,
                                               ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.location_on_rounded,
-                                              size: 16,
-                                              color: Colors.grey[500],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '\$${precio.toStringAsFixed(0)}',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                              color: MiTema.vino,
                                             ),
-                                            const SizedBox(width: 4),
-                                            Expanded(
-                                              child: Text(
-                                                direccionCorta,
-                                                style: TextStyle(
-                                                  color: Colors.grey[600],
-                                                  fontSize: 13,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on_rounded,
+                                            size: 16,
+                                            color: Colors.grey[500],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              direccionCorta,
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 13,
                                               ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Row(
-                                          children: [
-                                            _FeatureChip(
-                                              icon: Icons.bed_rounded,
-                                              text: '$camas',
-                                            ),
-                                            const SizedBox(width: 12),
-                                            _FeatureChip(
-                                              icon: Icons.bathtub_rounded,
-                                              text: '$banos',
-                                            ),
-                                            const SizedBox(width: 12),
-                                            _FeatureChip(
-                                              icon: Icons.square_foot_rounded,
-                                              text: tamano.toString(),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          _FeatureChip(
+                                            icon: Icons.bed_rounded,
+                                            text: '$camas',
+                                          ),
+                                          const SizedBox(width: 12),
+                                          _FeatureChip(
+                                            icon: Icons.bathtub_rounded,
+                                            text: '$banos',
+                                          ),
+                                          const SizedBox(width: 12),
+                                          _FeatureChip(
+                                            icon: Icons.square_foot_rounded,
+                                            text: tamano.toString(),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+                          )
+                          .animate()
+                          .fadeIn(
+                            duration: 500.ms,
+                            delay: (index * 50).clamp(0, 500).ms,
+                          )
+                          .flipV(
+                            begin: 0.5,
+                            end: 0,
+                            duration: 500.ms,
+                            curve: Curves.easeOutBack,
+                          ); // Card flip effect
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -385,6 +448,8 @@ class _FavoriteButtonState extends State<_FavoriteButton> {
   }
 
   Future<void> _toggleFavorite() async {
+    HapticFeedback.selectionClick(); // FEEDBACK AL DAR LIKE
+
     final uid = int.tryParse(widget.usuarioId) ?? 0;
 
     if (isFav) {
@@ -444,61 +509,6 @@ class _FeatureChip extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _FadeInUpItem extends StatefulWidget {
-  final Widget child;
-  final int index;
-  const _FadeInUpItem({required this.child, required this.index});
-
-  @override
-  State<_FadeInUpItem> createState() => _FadeInUpItemState();
-}
-
-class _FadeInUpItemState extends State<_FadeInUpItem>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _opacity;
-  late Animation<Offset> _translate;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-
-    // Pequeño delay escalonado basado en el índice (tope 300ms para que no tarde mucho si scrolleas rápido)
-    final delay = Duration(milliseconds: (widget.index * 100).clamp(0, 500));
-
-    _opacity = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _translate = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-
-    Future.delayed(delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacity,
-      child: SlideTransition(position: _translate, child: widget.child),
     );
   }
 }

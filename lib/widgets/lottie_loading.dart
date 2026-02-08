@@ -99,7 +99,7 @@ class LottieLoading extends StatelessWidget {
             child: LottieLoading(
               animationPath: animationPath,
               message: message,
-              size: 120,
+              size: 80,
             ),
           ),
         ),

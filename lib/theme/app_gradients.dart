@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'arrenda_colors.dart';
 
 class AppGradients {
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF003049), Color(0xFF669BBC)], // Azul -> Celeste
+    colors: [ArrendaColors.primary, ArrendaColors.accent],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient accentGradient = LinearGradient(
-    colors: [Color(0xFF780000), Color(0xFFC1121F)], // Vino -> Rojo
+    colors: [ArrendaColors.accent, ArrendaColors.gold],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient surfaceGradient = LinearGradient(
-    colors: [Color(0xFFFFFFFF), Color(0xFFFDF0D5)], // Blanco -> Crema (Subtle)
+    colors: [Colors.white, ArrendaColors.background],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );

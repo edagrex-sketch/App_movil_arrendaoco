@@ -17,6 +17,7 @@ class CalendarioInquilinoScreen extends StatefulWidget {
 
 class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
   late Stream<List<Map<String, dynamic>>> _eventosStream;
+  List<Map<String, dynamic>> _pagos = [];
   DateTime _selectedDate = DateTime.now();
 
   @override
@@ -29,6 +30,8 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
         .stream(primaryKey: ['id'])
         .eq('usuario_id', uid)
         .order('fecha', ascending: true);
+
+    _cargarPagos(uid);
   }
 
   @override
@@ -150,9 +153,19 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
 
-                final eventos = snapshot.data ?? [];
+                final eventosBD = snapshot.data ?? [];
+                // Fusionar con pagos
+                final eventos = [...eventosBD, ..._pagos];
+                // Ordenar por fecha
+                eventos.sort((a, b) {
+                  final da = DateTime.tryParse(a['fecha']) ?? DateTime.now();
+                  final db = DateTime.tryParse(b['fecha']) ?? DateTime.now();
+                  return da.compareTo(db);
+                });
+
+                // Filtrar para mostrar en lista: visitas Y pagos
                 final eventosVisita = eventos
-                    .where((e) => e['tipo'] == 'visita')
+                    .where((e) => e['tipo'] == 'visita' || e['tipo'] == 'pago')
                     .toList();
 
                 if (eventosVisita.isEmpty) {
@@ -312,10 +325,15 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
     final descripcion = evento['descripcion'] ?? '';
     final fechaRaw = evento['fecha'] ?? '';
 
+    final tipo = evento['tipo'] ?? 'accion';
+
     // Parse Date for nicer display
     DateTime? dateObj = DateTime.tryParse(fechaRaw);
     final dayStr = dateObj != null ? dateObj.day.toString() : '';
     final monthStr = dateObj != null ? _getMonthShortName(dateObj.month) : '';
+
+    final isPago = tipo == 'pago';
+    final mainColor = isPago ? Colors.green : MiTema.celeste;
 
     return StunningCard(
       padding: EdgeInsets.zero,
@@ -331,22 +349,26 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    dayStr,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: MiTema.celeste,
+                  if (isPago)
+                    Icon(Icons.attach_money, color: mainColor, size: 28)
+                  else ...[
+                    Text(
+                      dayStr,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: mainColor,
+                      ),
                     ),
-                  ),
-                  Text(
-                    monthStr.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: MiTema.azul,
+                    Text(
+                      monthStr.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -519,6 +541,15 @@ class _CalendarioInquilinoScreenState extends State<CalendarioInquilinoScreen> {
         );
       },
     );
+  }
+
+  Future<void> _cargarPagos(int uid) async {
+    final pagos = await BaseDatos.obtenerPagosPendientes(uid, 'Inquilino');
+    if (mounted) {
+      setState(() {
+        _pagos = pagos;
+      });
+    }
   }
 
   String _getMonthName(int month) {

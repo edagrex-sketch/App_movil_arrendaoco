@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:shimmer/shimmer.dart';
 
 class StunningTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -78,8 +79,8 @@ class _StunningTextFieldState extends State<StunningTextField>
           boxShadow: [
             BoxShadow(
               color: _isFocused
-                  ? MiTema.celeste.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.05),
+                  ? MiTema.celeste.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.05),
               blurRadius: _isFocused ? 12 : 8,
               offset: const Offset(0, 4),
             ),
@@ -196,7 +197,9 @@ class _StunningButtonState extends State<StunningButton>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: (widget.backgroundColor ?? MiTema.azul).withOpacity(0.4),
+                color: (widget.backgroundColor ?? MiTema.azul).withValues(
+                  alpha: 0.4,
+                ),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
@@ -235,7 +238,7 @@ class _StunningButtonState extends State<StunningButton>
   }
 }
 
-class StunningCard extends StatelessWidget {
+class StunningCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
@@ -248,26 +251,64 @@ class StunningCard extends StatelessWidget {
   });
 
   @override
+  State<StunningCard> createState() => _StunningCardState();
+}
+
+class _StunningCardState extends State<StunningCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.96,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: MiTema.celeste.withOpacity(0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+      onTapDown: widget.onTap != null ? (_) => _controller.forward() : null,
+      onTapUp: widget.onTap != null
+          ? (_) {
+              _controller.reverse();
+              widget.onTap!();
+            }
+          : null,
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: MiTema.celeste.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: widget.padding ?? const EdgeInsets.all(24.0),
+              child: widget.child,
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(24.0),
-            child: child,
           ),
         ),
       ),
@@ -293,7 +334,7 @@ class StunningSearchBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -309,7 +350,7 @@ class StunningSearchBar extends StatelessWidget {
           suffixIcon: Container(
             margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: MiTema.celeste.withOpacity(0.1),
+              color: MiTema.celeste.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.tune_rounded, color: MiTema.celeste, size: 20),
@@ -354,7 +395,7 @@ class StunningChip extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: MiTema.vino.withOpacity(0.3),
+                    color: MiTema.vino.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -371,4 +412,252 @@ class StunningChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class StunningShimmer extends StatelessWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const StunningShimmer({
+    super.key,
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.white,
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+      ),
+    );
+  }
+}
+
+class StunningShimmerCard extends StatelessWidget {
+  final bool isGrid;
+
+  const StunningShimmerCard({super.key, this.isGrid = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isGrid) {
+      return StunningCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Flexible Image placeholder
+            const Expanded(
+              child: StunningShimmer(
+                width: double.infinity,
+                height: double.infinity,
+                borderRadius: 0,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  StunningShimmer(width: 100, height: 14),
+                  SizedBox(height: 8),
+                  StunningShimmer(width: 60, height: 14),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return StunningCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image placeholder
+          const StunningShimmer(
+            width: double.infinity,
+            height: 220,
+            borderRadius: 0,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title & Price placeholders
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    StunningShimmer(width: 150, height: 20),
+                    StunningShimmer(width: 80, height: 20),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Address placeholder
+                const StunningShimmer(width: 200, height: 14),
+                const SizedBox(height: 12),
+                // Features chips placeholders
+                Row(
+                  children: const [
+                    StunningShimmer(width: 60, height: 24, borderRadius: 12),
+                    SizedBox(width: 12),
+                    StunningShimmer(width: 60, height: 24, borderRadius: 12),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StunningDropdown<T> extends StatefulWidget {
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final String label;
+  final IconData icon;
+  final ValueChanged<T?> onChanged;
+  final String? Function(T?)? validator;
+
+  const StunningDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.label,
+    required this.icon,
+    required this.onChanged,
+    this.validator,
+  });
+
+  @override
+  State<StunningDropdown<T>> createState() => _StunningDropdownState<T>();
+}
+
+class _StunningDropdownState<T> extends State<StunningDropdown<T>>
+    with SingleTickerProviderStateMixin {
+  final bool _isFocused = false; // Simulado para dropdown
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.02,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: _isFocused
+                  ? MiTema.celeste.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.05),
+              blurRadius: _isFocused ? 12 : 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Listener(
+          onPointerDown: (_) => _controller.forward(),
+          onPointerUp: (_) => _controller.reverse(),
+          child: DropdownButtonFormField<T>(
+            isExpanded: true,
+            value: widget.value,
+            items: widget.items,
+            onChanged: (v) {
+              widget.onChanged(v);
+              _controller.reverse();
+            },
+            validator: widget.validator,
+            icon: Icon(Icons.arrow_drop_down_rounded, color: MiTema.celeste),
+            style: TextStyle(
+              color: MiTema.azul,
+              fontWeight: FontWeight.w500,
+              fontSize: 16,
+              overflow: TextOverflow.ellipsis, // Add ellipsis
+            ),
+            decoration: InputDecoration(
+              labelText: widget.label,
+              labelStyle: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.normal,
+              ),
+              prefixIcon: Icon(widget.icon, color: Colors.grey[400]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: Colors.transparent,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, // Reduced from 20
+                vertical: 16,
+              ),
+            ),
+            dropdownColor: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class StunningPageRoute<T> extends PageRouteBuilder<T> {
+  final Widget page;
+
+  StunningPageRoute({required this.page})
+    : super(
+        pageBuilder: (context, animation, secondaryAnimation) => page,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.easeOutQuart;
+
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 500),
+        reverseTransitionDuration: const Duration(milliseconds: 500),
+      );
 }

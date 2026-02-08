@@ -18,6 +18,7 @@ class CalendarioArrendadorScreen extends StatefulWidget {
 class _CalendarioArrendadorScreenState
     extends State<CalendarioArrendadorScreen> {
   late Stream<List<Map<String, dynamic>>> _eventosStream;
+  List<Map<String, dynamic>> _pagos = [];
   DateTime _selectedDate = DateTime.now();
 
   @override
@@ -30,6 +31,8 @@ class _CalendarioArrendadorScreenState
         .stream(primaryKey: ['id'])
         .eq('usuario_id', uid)
         .order('fecha', ascending: true);
+
+    _cargarPagos(uid);
   }
 
   @override
@@ -155,7 +158,15 @@ class _CalendarioArrendadorScreenState
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
 
-                final eventos = snapshot.data ?? [];
+                final eventosBD = snapshot.data ?? [];
+                // Fusionar con pagos
+                final eventos = [...eventosBD, ..._pagos];
+                // Ordenar por fecha
+                eventos.sort((a, b) {
+                  final da = DateTime.tryParse(a['fecha']) ?? DateTime.now();
+                  final db = DateTime.tryParse(b['fecha']) ?? DateTime.now();
+                  return da.compareTo(db);
+                });
 
                 if (eventos.isEmpty) {
                   return Padding(
@@ -325,6 +336,10 @@ class _CalendarioArrendadorScreenState
       case 'recordatorio':
         icon = Icons.notifications_active_rounded;
         iconColor = Colors.orange;
+        break;
+      case 'pago':
+        icon = Icons.attach_money_rounded;
+        iconColor = Colors.green;
         break;
       default:
         icon = Icons.task_alt_rounded;
@@ -580,6 +595,15 @@ class _CalendarioArrendadorScreenState
         );
       },
     );
+  }
+
+  Future<void> _cargarPagos(int uid) async {
+    final pagos = await BaseDatos.obtenerPagosPendientes(uid, 'Arrendador');
+    if (mounted) {
+      setState(() {
+        _pagos = pagos;
+      });
+    }
   }
 
   String _getMonthName(int month) {

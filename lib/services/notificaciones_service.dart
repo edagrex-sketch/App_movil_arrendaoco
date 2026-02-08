@@ -49,12 +49,18 @@ class NotificacionesService {
     await inicializar();
 
     const androidDetails = AndroidNotificationDetails(
-      'arrendaoco_channel',
-      'ArrendaOco Notificaciones',
-      channelDescription: 'Notificaciones de la app ArrendaOco',
-      importance: Importance.high,
-      priority: Priority.high,
+      'arrendaoco_high_importance', // Canal ID
+      'Notificaciones Prioritarias', // Canal Nombre
+      channelDescription: 'Alertas que despiertan la pantalla',
+      importance: Importance.max, // Máxima importancia para despertar
+      priority: Priority.max, // Máxima prioridad
       showWhen: true,
+      playSound: true,
+      enableVibration: true,
+      fullScreenIntent: true, // CLAVE PARA DESPERTAR (si tiene permiso)
+      category:
+          AndroidNotificationCategory.call, // Simular llamada ayuda a despertar
+      visibility: NotificationVisibility.public,
     );
 
     const iosDetails = DarwinNotificationDetails();

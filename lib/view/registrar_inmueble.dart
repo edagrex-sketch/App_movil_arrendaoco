@@ -11,6 +11,7 @@ import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class RegistrarInmuebleScreen extends StatefulWidget {
   final String propietarioId;
@@ -110,24 +111,6 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
       _mensajeUbicacion =
           'Ubicación cargada: Lat ${data['latitud'].toStringAsFixed(5)}, Lng ${data['longitud'].toStringAsFixed(5)}';
     }
-  }
-
-  // Wrapper visual para Dropdowns para que coincidan con StunningTextField
-  Widget _buildDropdownContainer({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
   }
 
   Future<void> seleccionarImagenes() async {
@@ -339,458 +322,546 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 600),
-                  child: Column(
-                    children: [
-                      StunningCard(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Detalles de la Propiedad',
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      color: MiTema.azul,
-                                    ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Haz que tu propiedad destaque con una descripción detallada.',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: Colors.grey[600]),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 24),
-
-                              // Título
-                              StunningTextField(
-                                controller: _tituloController,
-                                label: 'Título del inmueble',
-                                icon: Icons.home_rounded,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Por favor ingresa un título';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Descripción
-                              StunningTextField(
-                                controller: _descripcionController,
-                                label: 'Descripción',
-                                icon: Icons.description_rounded,
-                                maxLines: 3,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Por favor ingresa una descripción';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Precio
-                              StunningTextField(
-                                controller: _precioController,
-                                label: 'Precio mensual',
-                                icon: Icons.attach_money_rounded,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Ingresa el precio';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Categoría y Tamaño (Row)
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        // SECCIÓN 1: INFORMACIÓN BÁSICA
+                        _SectionTitle(
+                              title: 'Información Básica',
+                              icon: Icons.info_outline_rounded,
+                            )
+                            .animate()
+                            .fadeIn(duration: 600.ms)
+                            .blurXY(
+                              begin: 10,
+                              end: 0,
+                              duration: 600.ms,
+                            ) // Unblur effect
+                            .slideX(begin: -0.2, curve: Curves.easeOutQuad),
+                        StunningCard(
+                              child: Column(
                                 children: [
-                                  Expanded(
-                                    child: _buildDropdownContainer(
-                                      child: DropdownButtonFormField<String>(
-                                        isExpanded: true, // Prevent overflow
-                                        value: _categoriaSeleccionada,
-                                        decoration: InputDecoration(
-                                          labelText: 'Categoría',
-                                          prefixIcon: Icon(
-                                            Icons.apartment,
-                                            color: MiTema.celeste,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            borderSide: BorderSide.none,
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 15,
-                                              ),
-                                        ),
-                                        items: _categorias
-                                            .map(
-                                              (cat) => DropdownMenuItem(
-                                                value: cat,
-                                                child: Text(
-                                                  cat,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            )
-                                            .toList(),
-                                        onChanged: (v) => setState(
-                                          () => _categoriaSeleccionada = v,
-                                        ),
-                                      ),
-                                    ),
+                                  StunningTextField(
+                                    controller: _tituloController,
+                                    label: 'Título del inmueble',
+                                    icon: Icons.home_rounded,
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'Ingresa un título';
+                                      }
+                                      if (value.trim().length < 5) {
+                                        return 'Mínimo 5 caracteres';
+                                      }
+                                      return null;
+                                    },
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildDropdownContainer(
-                                      child: DropdownButtonFormField<String>(
-                                        isExpanded: true,
-                                        value: _tamano,
-                                        decoration: InputDecoration(
-                                          labelText: 'Tamaño',
-                                          prefixIcon: Icon(
-                                            Icons.square_foot,
-                                            color: MiTema.celeste,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            borderSide: BorderSide.none,
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 15,
-                                              ),
+                                  const SizedBox(height: 20),
+                                  StunningTextField(
+                                    controller: _descripcionController,
+                                    label: 'Descripción',
+                                    icon: Icons.description_rounded,
+                                    maxLines: 3,
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'Ingresa una descripción';
+                                      }
+                                      if (value.trim().length < 15) {
+                                        return 'Mínimo 15 caracteres';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+                                  StunningTextField(
+                                    controller: _precioController,
+                                    label: 'Precio mensual',
+                                    icon: Icons.attach_money_rounded,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
                                         ),
-                                        items: ['Pequeño', 'Mediano', 'Grande']
-                                            .map(
-                                              (t) => DropdownMenuItem(
-                                                value: t,
-                                                child: Text(
-                                                  t,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            )
-                                            .toList(),
-                                        onChanged: (v) =>
-                                            setState(() => _tamano = v!),
-                                      ),
-                                    ),
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return 'Ingresa el precio';
+                                      }
+                                      final num = double.tryParse(
+                                        value.replaceAll(',', '.'),
+                                      );
+                                      if (num == null || num <= 0) {
+                                        return 'Precio inválido';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 20),
+                            )
+                            .animate()
+                            .fadeIn(delay: 200.ms, duration: 600.ms)
+                            .slideX(
+                              begin: -0.1,
+                              curve: Curves.easeOutBack,
+                            ), // Elastic slide from left
+                        const SizedBox(height: 24),
 
-                              // Camas y Baños (Row)
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        // SECCIÓN 2: CARACTERÍSTICAS
+                        _SectionTitle(
+                              title: 'Características',
+                              icon: Icons.grid_view_rounded,
+                            )
+                            .animate()
+                            .fadeIn(delay: 400.ms)
+                            .scale(begin: const Offset(0.8, 0.8)), // Pop in
+                        StunningCard(
+                              child: Column(
                                 children: [
-                                  Expanded(
-                                    child: _buildDropdownContainer(
-                                      child: DropdownButtonFormField<int>(
-                                        value: _camas,
-                                        decoration: InputDecoration(
-                                          labelText: 'Camas',
-                                          prefixIcon: Icon(
-                                            Icons.bed_rounded,
-                                            color: MiTema.celeste,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            borderSide: BorderSide.none,
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 15,
-                                              ),
-                                        ),
-                                        items: [1, 2, 3, 4, 5]
-                                            .map(
-                                              (n) => DropdownMenuItem(
-                                                value: n,
-                                                child: Text('$n'),
-                                              ),
-                                            )
-                                            .toList(),
-                                        onChanged: (v) =>
-                                            setState(() => _camas = v!),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _buildDropdownContainer(
-                                      child: DropdownButtonFormField<int>(
-                                        value: _banos,
-                                        decoration: InputDecoration(
-                                          labelText: 'Baños',
-                                          prefixIcon: Icon(
-                                            Icons.bathtub_rounded,
-                                            color: MiTema.celeste,
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            borderSide: BorderSide.none,
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 15,
-                                              ),
-                                        ),
-                                        items: [1, 2, 3, 4]
-                                            .map(
-                                              (n) => DropdownMenuItem(
-                                                value: n,
-                                                child: Text('$n'),
-                                              ),
-                                            )
-                                            .toList(),
-                                        onChanged: (v) =>
-                                            setState(() => _banos = v!),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-
-                              // Disponible Switch
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: _disponible
-                                      ? MiTema.celeste.withOpacity(0.1)
-                                      : Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: _disponible
-                                        ? MiTema.celeste.withOpacity(0.3)
-                                        : Colors.transparent,
-                                  ),
-                                ),
-                                child: SwitchListTile(
-                                  title: Text(
-                                    'Disponible para renta',
-                                    style: TextStyle(
-                                      color: MiTema.azul,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  value: _disponible,
-                                  activeColor: MiTema.celeste,
-                                  onChanged: (val) =>
-                                      setState(() => _disponible = val),
-                                ),
-                              ),
-                              const SizedBox(height: 30),
-
-                              // FOTOGRAFÍAS
-                              Text(
-                                'Galería de Imágenes',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: MiTema.azul,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              InkWell(
-                                onTap: seleccionarImagenes,
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  height: 120,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50], // Very light grey
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: MiTema.celeste.withOpacity(0.5),
-                                      style: BorderStyle.solid,
-                                      width: 1.5,
-                                    ),
-                                    // Make it look like a dashed area or inviting area
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.add_photo_alternate_rounded,
-                                        size: 40,
-                                        color: MiTema.celeste,
+                                      Expanded(
+                                        child: StunningDropdown<String>(
+                                          value: _categoriaSeleccionada,
+                                          label: 'Categoría',
+                                          icon: Icons.apartment,
+                                          items: _categorias
+                                              .map(
+                                                (cat) => DropdownMenuItem(
+                                                  value: cat,
+                                                  child: Text(cat),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (v) => setState(
+                                            () => _categoriaSeleccionada = v,
+                                          ),
+                                        ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Toca para seleccionar fotos',
-                                        style: TextStyle(
-                                          color: MiTema.celeste,
-                                          fontWeight: FontWeight.w500,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: StunningDropdown<String>(
+                                          value: _tamano,
+                                          label: 'Tamaño',
+                                          icon: Icons.square_foot,
+                                          items:
+                                              ['Pequeño', 'Mediano', 'Grande']
+                                                  .map(
+                                                    (t) => DropdownMenuItem(
+                                                      value: t,
+                                                      child: Text(t),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                          onChanged: (v) =>
+                                              setState(() => _tamano = v!),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                              if (_imagenesSeleccionadas.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 120,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: _imagenesSeleccionadas.length,
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(width: 12),
-                                    itemBuilder: (context, index) {
-                                      final img = _imagenesSeleccionadas[index];
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(
-                                                0.1,
-                                              ),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          child: ImagenDinamica(
-                                            ruta: img.path,
-                                            width: 120,
-                                            height: 120,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 30),
-
-                              // UBICACIÓN
-                              Text(
-                                'Ubicación',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: MiTema.azul,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              if (_ubicacionActual == null)
-                                StunningButton(
-                                  onPressed: _obtenerUbicacion,
-                                  text: 'Obtener Ubicación Actual',
-                                  icon: Icons.location_on_rounded,
-                                )
-                              else
-                                Column(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.green.withOpacity(0.3),
+                                  const SizedBox(height: 20),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: StunningDropdown<int>(
+                                          value: _camas,
+                                          label: 'Camas',
+                                          icon: Icons.bed_rounded,
+                                          items: [1, 2, 3, 4, 5]
+                                              .map(
+                                                (n) => DropdownMenuItem(
+                                                  value: n,
+                                                  child: Text('$n'),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (v) =>
+                                              setState(() => _camas = v!),
                                         ),
                                       ),
-                                      child: Row(
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: StunningDropdown<int>(
+                                          value: _banos,
+                                          label: 'Baños',
+                                          icon: Icons.bathtub_rounded,
+                                          items: [1, 2, 3, 4]
+                                              .map(
+                                                (n) => DropdownMenuItem(
+                                                  value: n,
+                                                  child: Text('$n'),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (v) =>
+                                              setState(() => _banos = v!),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _disponible
+                                          ? MiTema.celeste.withValues(
+                                              alpha: 0.1,
+                                            )
+                                          : Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: _disponible
+                                            ? MiTema.celeste.withValues(
+                                                alpha: 0.3,
+                                              )
+                                            : Colors.grey[300]!,
+                                      ),
+                                    ),
+                                    child: SwitchListTile(
+                                      title: Text(
+                                        'Disponible para renta',
+                                        style: TextStyle(
+                                          color: _disponible
+                                              ? MiTema.azul
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      value: _disponible,
+                                      activeThumbColor: MiTema.celeste,
+                                      onChanged: (val) =>
+                                          setState(() => _disponible = val),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            .animate()
+                            .fadeIn(delay: 500.ms)
+                            .flipV(
+                              begin: -0.1,
+                              duration: 600.ms,
+                              curve: Curves.easeOut,
+                            ), // Subtle 3D Flip
+                        const SizedBox(height: 24),
+
+                        // SECCIÓN 3: GALERÍA
+                        _SectionTitle(
+                              title: 'Galería de Fotos',
+                              icon: Icons.photo_library_rounded,
+                            )
+                            .animate()
+                            .fadeIn(delay: 700.ms)
+                            .slideX(begin: 0.2), // Slide from right
+                        StunningCard(
+                              padding: EdgeInsets.zero,
+                              child: Column(
+                                children: [
+                                  InkWell(
+                                    onTap: seleccionarImagenes,
+                                    child: Container(
+                                      width: double.infinity,
+                                      height: 160,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.grey[50], // Light background
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                              top: Radius.circular(24),
+                                            ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          const Icon(
-                                            Icons.check_circle,
-                                            color: Colors.green,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              _mensajeUbicacion,
-                                              style: TextStyle(
-                                                color: Colors.green[800],
-                                                fontSize: 12,
-                                              ),
+                                          Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: MiTema.celeste
+                                                      .withValues(alpha: 0.2),
+                                                  blurRadius: 12,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Icon(
+                                              Icons.add_a_photo_rounded,
+                                              size: 32,
+                                              color: MiTema.celeste,
                                             ),
                                           ),
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.refresh,
-                                              color: Colors.green,
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'Toca para subir fotos',
+                                            style: TextStyle(
+                                              color: MiTema.celeste,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
                                             ),
-                                            onPressed: _obtenerUbicacion,
+                                          ),
+                                          Text(
+                                            'Muestra lo mejor de tu propiedad',
+                                            style: TextStyle(
+                                              color: Colors.grey[500],
+                                              fontSize: 12,
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 12),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: MapPreviewOsm(
-                                        lat: _ubicacionActual!.latitude,
-                                        lng: _ubicacionActual!.longitude,
+                                  ),
+                                  if (_imagenesSeleccionadas.isNotEmpty)
+                                    Container(
+                                      height: 140,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        16,
+                                      ),
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount:
+                                            _imagenesSeleccionadas.length,
+                                        separatorBuilder: (_, __) =>
+                                            const SizedBox(width: 12),
+                                        itemBuilder: (context, index) {
+                                          final img =
+                                              _imagenesSeleccionadas[index];
+                                          return Stack(
+                                            children: [
+                                              Container(
+                                                width: 120, // Square ish
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
+                                                      blurRadius: 5,
+                                                      offset: const Offset(
+                                                        0,
+                                                        3,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                  child: ImagenDinamica(
+                                                    ruta: img.path,
+                                                    width: 120,
+                                                    height: 140,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                top: 4,
+                                                right: 4,
+                                                child: GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _imagenesSeleccionadas
+                                                          .removeAt(index);
+                                                    });
+                                                  },
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.close,
+                                                      color: Colors.white,
+                                                      size: 14,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                            .animate()
+                            .fadeIn(delay: 800.ms)
+                            .saturate(
+                              begin: 0,
+                              duration: 800.ms,
+                            ) // Grayscale to Color
+                            .scale(begin: const Offset(0.95, 0.95)),
+                        const SizedBox(height: 24),
+
+                        // SECCIÓN 4: UBICACIÓN
+                        _SectionTitle(
+                              title: 'Ubicación',
+                              icon: Icons.location_on_rounded,
+                            )
+                            .animate()
+                            .fadeIn(delay: 1000.ms)
+                            .moveY(begin: 20), // Move up
+                        StunningCard(
+                              padding: EdgeInsets.zero,
+                              child: Column(
+                                children: [
+                                  if (_ubicacionActual == null)
+                                    Padding(
+                                      padding: const EdgeInsets.all(24),
+                                      child: Center(
+                                        child: StunningButton(
+                                          onPressed: _obtenerUbicacion,
+                                          text: 'DETECTAR UBICACIÓN',
+                                          icon: Icons.my_location_rounded,
+                                          backgroundColor:
+                                              MiTema.vino, // Accent color
+                                        ),
+                                      ),
+                                    )
+                                  else ...[
+                                    SizedBox(
+                                      height: 200,
+                                      width: double.infinity,
+                                      child: ClipRRect(
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                              top: Radius.circular(24),
+                                            ),
+                                        child: MapPreviewOsm(
+                                          lat: _ubicacionActual!.latitude,
+                                          lng: _ubicacionActual!.longitude,
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.check_circle_rounded,
+                                            color: Colors.green[600],
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _mensajeUbicacion.isNotEmpty
+                                                  ? _mensajeUbicacion
+                                                  : 'Ubicación detectada correctamente',
+                                              style: TextStyle(
+                                                color: Colors.green[800],
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: _obtenerUbicacion,
+                                            child: Text(
+                                              'Actualizar',
+                                              style: TextStyle(
+                                                color: MiTema.azul,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
-                                ),
-
-                              const SizedBox(height: 40),
-
-                              // BOTÓN GUARDAR
-                              StunningButton(
-                                onPressed: _guardarInmueble,
-                                text: widget.inmuebleId != null
-                                    ? 'ACTUALIZAR PROPIEDAD'
-                                    : 'PUBLICAR PROPIEDAD',
-                                icon: Icons.publish_rounded,
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                            )
+                            .animate()
+                            .fadeIn(delay: 1200.ms)
+                            .shimmer(
+                              duration: 1.seconds,
+                              delay: 2.seconds,
+                            ) // Shimmer attention
+                            .slideY(begin: 0.1),
+                        const SizedBox(height: 40),
+
+                        // ACTION BUTTON
+                        StunningButton(
+                              onPressed: _guardarInmueble,
+                              text: widget.inmuebleId != null
+                                  ? 'ACTUALIZAR PROPIEDAD'
+                                  : 'PUBLICAR PROPIEDAD',
+                              icon: widget.inmuebleId != null
+                                  ? Icons.save_as_rounded
+                                  : Icons.rocket_launch_rounded,
+                            )
+                            .animate(
+                              onPlay: (controller) =>
+                                  controller.repeat(reverse: true),
+                            )
+                            .shimmer(
+                              delay: 2000.ms,
+                              duration: 1500.ms,
+                              color: Colors.white.withValues(alpha: 0.3),
+                            )
+                            .animate() // Reset animation chain
+                            .fadeIn(delay: 1600.ms)
+                            .scale(),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final IconData icon;
+
+  const _SectionTitle({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: MiTema.azul, size: 24),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: MiTema.azul,
+            ),
+          ),
+        ],
       ),
     );
   }

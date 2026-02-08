@@ -18,13 +18,13 @@ class _SeleccionarRolScreenState extends State<SeleccionarRolScreen>
   final roles = [
     {
       "nombre": "Quiero publicitar mi propiedad",
-      "rol": "Arrendador",
+      "rol": "arrendador",
       "icono": Icons.home_work_rounded,
       "description": "Publica y gestiona tus inmuebles fácilmente.",
     },
     {
       "nombre": "Buscar lugares para rentar",
-      "rol": "Inquilino",
+      "rol": "inquilino",
       "icono": Icons.person_search_rounded,
       "description": "Encuentra el hogar perfecto para ti.",
     },
@@ -182,9 +182,8 @@ class _SeleccionarRolScreenState extends State<SeleccionarRolScreen>
                     if (_rolSeleccionado != null) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              RegisterScreen(rolInicial: _rolSeleccionado!),
+                        StunningPageRoute(
+                          page: RegisterScreen(rolInicial: _rolSeleccionado!),
                         ),
                       );
                     }

@@ -98,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           onComplete: () {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              StunningPageRoute(page: const LoginScreen()),
             );
           },
         );
@@ -251,9 +251,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                           onPressed: () {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(
-                                builder: (context) => const LoginScreen(),
-                              ),
+                              StunningPageRoute(page: const LoginScreen()),
                             );
                           },
                           child: RichText(

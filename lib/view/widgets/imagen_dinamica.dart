@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
 
 class ImagenDinamica extends StatelessWidget {
   final String ruta;
@@ -27,30 +29,23 @@ class ImagenDinamica extends StatelessWidget {
     }
 
     if (ruta.startsWith('http')) {
-      return Image.network(
-        ruta,
+      return CachedNetworkImage(
+        imageUrl: ruta,
         fit: fit,
         width: width,
         height: height,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: width,
-            height: height,
-            color: Colors.grey[200],
-            child: const Icon(Icons.broken_image, color: Colors.grey),
-          );
-        },
+        placeholder: (context, url) => StunningShimmer(
+          width: width ?? double.infinity,
+          height: height ?? double.infinity,
+          borderRadius: 0,
+        ),
+        errorWidget: (context, url, error) => Container(
+          width: width,
+          height: height,
+          color: Colors.grey[200],
+          child: const Icon(Icons.broken_image, color: Colors.grey),
+        ),
+        fadeInDuration: const Duration(milliseconds: 300),
       );
     } else {
       // Asumimos ruta local
