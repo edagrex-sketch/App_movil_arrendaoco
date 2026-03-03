@@ -7,7 +7,6 @@ import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'dart:async';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DetalleRentaScreen extends StatefulWidget {
   final String rentaId;
@@ -20,18 +19,14 @@ class DetalleRentaScreen extends StatefulWidget {
 
 class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
   late Future<Map<String, dynamic>?> _futureRenta;
-  late Stream<List<Map<String, dynamic>>> _pagosStream;
+  late Future<List<Map<String, dynamic>>> _futurePagos;
 
   @override
   void initState() {
     super.initState();
     final rId = int.tryParse(widget.rentaId) ?? 0;
     _futureRenta = BaseDatos.obtenerRentaPorId(rId);
-    _pagosStream = Supabase.instance.client
-        .from('pagos_renta')
-        .stream(primaryKey: ['id'])
-        .eq('contrato_id', rId)
-        .order('fecha_limite', ascending: false);
+    _futurePagos = BaseDatos.obtenerPagosDeRenta(rId);
   }
 
   @override
@@ -243,8 +238,8 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        StreamBuilder<List<Map<String, dynamic>>>(
-                          stream: _pagosStream,
+                        FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _futurePagos,
                           builder: (context, pagoSnapshot) {
                             if (pagoSnapshot.connectionState ==
                                 ConnectionState.waiting) {

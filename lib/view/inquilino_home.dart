@@ -8,6 +8,7 @@ import 'package:arrendaoco/view/perfil.dart';
 import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
+import 'package:arrendaoco/view/roco_chat.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
   final String usuarioId;
@@ -140,6 +141,16 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const RocoChatScreen()),
+          );
+        },
+        backgroundColor: Colors.orange,
+        child: const Icon(Icons.pets_rounded, color: Colors.white),
       ),
       body: SafeArea(child: pages[_currentIndex]),
     );

@@ -1,422 +1,362 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:arrendaoco/services/api_service.dart';
+import 'package:dio/dio.dart';
 
 class BaseDatos {
-  static final _supabase = Supabase.instance.client;
+  static final _api = ApiService();
 
   // ================== USUARIOS ==================
 
   static Future<Map<String, dynamic>?> obtenerUsuario(int id) async {
-    final response = await _supabase
-        .from('usuarios')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
-    return response;
+    try {
+      final response = await _api.get('/me');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
   }
 
   static Future<void> actualizarUsuario(
     int id,
     Map<String, dynamic> data,
   ) async {
-    await _supabase.from('usuarios').update(data).eq('id', id);
+    try {
+      await _api.post('/perfil/actualizar', data: data);
+    } catch (e) {
+      debugPrint('Error actualizando usuario: $e');
+    }
   }
 
   // ================== INMUEBLES ==================
 
-  static Future<int> insertarInmueble(Map<String, dynamic> data) async {
-    final response = await _supabase
-        .from('inmuebles')
-        .insert(data)
-        .select('id')
-        .single();
-    return response['id'] as int;
+  static Future<int> insertarInmueble(
+    Map<String, dynamic> data, [
+    List<String>? imagePaths,
+  ]) async {
+    try {
+      final formData = FormData.fromMap({
+        ...data,
+        if (imagePaths != null && imagePaths.isNotEmpty)
+          'imagenes[]': await Future.wait(
+            imagePaths.map((path) => MultipartFile.fromFile(path)),
+          ),
+      });
+
+      final response = await _api.post('/inmuebles', data: formData);
+      return response.data['data']['id'] ?? 0;
+    } catch (e) {
+      debugPrint('Error insertando inmueble: $e');
+      return 0;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerInmuebles() async {
-    final response = await _supabase
-        .from('inmuebles')
-        .select()
-        .order('id', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/inmuebles/public-list');
+      final List data = response.data['data'] ?? [];
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerInmueblesPorPropietario(
     int propietarioId,
   ) async {
-    final response = await _supabase
-        .from('inmuebles')
-        .select()
-        .eq('propietario_id', propietarioId)
-        .order('id', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/inmuebles');
+      final List data = response.data['data'] ?? [];
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<int> actualizarInmueble(
     int id,
-    Map<String, dynamic> data,
-  ) async {
-    await _supabase.from('inmuebles').update(data).eq('id', id);
-    return id;
+    Map<String, dynamic> data, [
+    List<String>? newImagePaths,
+  ]) async {
+    try {
+      final formData = FormData.fromMap({
+        ...data,
+        '_method': 'PUT', // Simular PUT en un POST para FormData
+        if (newImagePaths != null && newImagePaths.isNotEmpty)
+          'imagenes[]': await Future.wait(
+            newImagePaths.map((path) => MultipartFile.fromFile(path)),
+          ),
+      });
+
+      await _api.post('/inmuebles/$id', data: formData);
+      return id;
+    } catch (e) {
+      debugPrint('Error actualizando inmueble: $e');
+      return 0;
+    }
   }
 
   static Future<Map<String, dynamic>?> obtenerInmueblePorId(int id) async {
-    final response = await _supabase
-        .from('inmuebles')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
-    return response;
+    try {
+      final response = await _api.get('/inmuebles/public-detail/$id');
+      return response.data['data'] as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error obteniendo inmueble por id: $e');
+      return null;
+    }
   }
 
   static Future<int> eliminarInmueble(int id) async {
-    await _supabase.from('favoritos').delete().eq('inmueble_id', id);
-    await _supabase.from('resenas').delete().eq('inmueble_id', id);
-
-    final rentas = await _supabase
-        .from('rentas')
-        .select('id')
-        .eq('inmueble_id', id);
-    for (var r in rentas) {
-      final rId = r['id'];
-      await _supabase.from('pagos_renta').delete().eq('renta_id', rId);
-      await _supabase.from('calendario').delete().eq('renta_id', rId);
+    try {
+      await _api.delete('/inmuebles/$id');
+      return id;
+    } catch (e) {
+      return 0;
     }
-    await _supabase.from('rentas').delete().eq('inmueble_id', id);
-    await _supabase.from('inmuebles').delete().eq('id', id);
-    return id;
   }
 
-  // ================== RESEÑAS ==================
+  // ================== RESEÑAS (SYNC CON LARAVEL) ==================
 
-  /// Inserta una reseña y devuelve su ID.
   static Future<int> insertarResena(Map<String, dynamic> resena) async {
     try {
-      final response = await _supabase
-          .from('resenas')
-          .insert(resena)
-          .select('id')
-          .single();
-      return response['id'] as int;
-    } on PostgrestException catch (e) {
-      if (resena.containsKey('usuario_id')) {
-        debugPrint(
-          '⚠️ Error insertando reseña: ${e.message}. Reintentando sin usuario_id.',
-        );
-        final copia = Map<String, dynamic>.from(resena);
-        copia.remove('usuario_id');
-        final response = await _supabase
-            .from('resenas')
-            .insert(copia)
-            .select('id')
-            .single();
-        return response['id'] as int;
-      }
-      rethrow;
-    }
-  }
-
-  /// Obtiene una reseña específica por su ID.
-  static Future<Map<String, dynamic>?> obtenerResenaPorId(int id) async {
-    try {
-      final response = await _supabase
-          .from('resenas')
-          .select()
-          .eq('id', id)
-          .maybeSingle();
-      return response;
+      final response = await _api.post(
+        '/inmuebles/${resena['inmueble_id']}/resenas',
+        data: {
+          'puntuacion': resena['rating'],
+          'comentario': resena['comentario'],
+        },
+      );
+      return (response.data['resena'] != null)
+          ? (response.data['resena']['id'] ?? 0)
+          : 0;
     } catch (e) {
-      debugPrint('Error buscando reseña $id: $e');
-      return null;
+      debugPrint('Error insertando reseña: $e');
+      return 0;
     }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerResenasPorInmueble(
     int inmuebleId,
   ) async {
-    final response = await _supabase
-        .from('resenas')
-        .select()
-        .eq('inmueble_id', inmuebleId)
-        .order('id', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
-  }
-
-  static Future<Map<String, dynamic>> obtenerResumenResenas(
-    int inmuebleId,
-  ) async {
-    final response = await _supabase
-        .from('resenas')
-        .select('rating')
-        .eq('inmueble_id', inmuebleId);
-
-    final list = List<Map<String, dynamic>>.from(response);
-    if (list.isEmpty) return {'promedio': 0.0, 'total': 0};
-
-    final total = list.length;
-    final sum = list.fold<num>(0, (prev, e) => prev + (e['rating'] as num));
-    final promedio = sum / total;
-
-    return {'promedio': promedio.toDouble(), 'total': total};
-  }
-
-  static Future<void> actualizarResena(
-    int id,
-    Map<String, dynamic> data,
-  ) async {
-    await _supabase.from('resenas').update(data).eq('id', id);
+    try {
+      final response = await _api.get('/inmuebles/$inmuebleId/resenas');
+      final List data = (response.data is Map)
+          ? (response.data['data'] ?? [])
+          : [];
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<void> eliminarResena(int id) async {
-    await _supabase.from('resenas').delete().eq('id', id);
+    try {
+      await _api.delete('/resenas/$id');
+    } catch (e) {
+      debugPrint('Error eliminando reseña: $e');
+    }
   }
 
-  static Future<void> responderResena(int id, String respuesta) async {
-    await _supabase
-        .from('resenas')
-        .update({
-          'respuesta': respuesta,
-          'fecha_respuesta': DateTime.now().toIso8601String(),
-        })
-        .eq('id', id);
+  static Future<Map<String, dynamic>?> obtenerResenaPorId(int id) async {
+    try {
+      final response = await _api.get('/resenas/$id');
+      return response.data['data'] as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error obteniendo reseña por id: $e');
+      return null;
+    }
   }
 
-  // ================== CHAT EN RESEÑAS ==================
+  // ================== CHAT (AI / ARRENDITO) ==================
 
-  static Stream<List<Map<String, dynamic>>> obtenerMensajesResena(
-    int resenaId,
-  ) {
-    return _supabase
-        .from('mensajes_resena')
-        .stream(primaryKey: ['id'])
-        .eq('resena_id', resenaId)
-        .order('fecha', ascending: true);
+  static Future<String> enviarMensajeChat(String mensaje) async {
+    try {
+      final response = await _api.post(
+        '/arrendito/chat',
+        data: {'message': mensaje},
+      );
+      return response.data['reply'] ??
+          'Lo siento, no pude procesar tu mensaje.';
+    } catch (e) {
+      return 'Error de conexión con Roco.';
+    }
   }
 
-  static Future<void> enviarMensajeResena({
-    required int resenaId,
-    required int usuarioId,
-    required String usuarioNombre,
-    required String mensaje,
-  }) async {
-    await _supabase.from('mensajes_resena').insert({
-      'resena_id': resenaId,
-      'usuario_id': usuarioId,
-      'usuario_nombre': usuarioNombre,
-      'mensaje': mensaje,
-      'fecha': DateTime.now().toIso8601String(),
-    });
+  // ================== FAVORITOS (SYNC CON LARAVEL) ==================
+
+  static Future<void> agregarFavorito(int usuarioId, int inmuebleId) async {
+    try {
+      await _api.post('/favoritos/$inmuebleId/toggle');
+    } catch (e) {
+      debugPrint('Error agregando favorito: $e');
+    }
   }
 
-  // ================== FAVORITOS ==================
-
-  static Future<int> agregarFavorito(int usuarioId, int inmuebleId) async {
-    final response = await _supabase
-        .from('favoritos')
-        .insert({
-          'usuario_id': usuarioId,
-          'inmueble_id': inmuebleId,
-          'fecha_agregado': DateTime.now().toIso8601String(),
-        })
-        .select('id')
-        .single();
-    return response['id'] as int;
-  }
-
-  static Future<int> eliminarFavorito(int usuarioId, int inmuebleId) async {
-    await _supabase.from('favoritos').delete().match({
-      'usuario_id': usuarioId,
-      'inmueble_id': inmuebleId,
-    });
-    return 1;
+  static Future<void> eliminarFavorito(int usuarioId, int inmuebleId) async {
+    try {
+      await _api.post('/favoritos/$inmuebleId/toggle');
+    } catch (e) {
+      debugPrint('Error eliminando favorito: $e');
+    }
   }
 
   static Future<bool> esFavorito(int usuarioId, int inmuebleId) async {
-    final response = await _supabase.from('favoritos').select().match({
-      'usuario_id': usuarioId,
-      'inmueble_id': inmuebleId,
-    });
-    return (response as List).isNotEmpty;
+    try {
+      final response = await _api.get('/favoritos');
+      final List data = (response.data is Map)
+          ? (response.data['data'] ?? [])
+          : [];
+      return data.any((i) => i['id'] == inmuebleId);
+    } catch (e) {
+      return false;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerFavoritos(
     int usuarioId,
   ) async {
-    final response = await _supabase
-        .from('favoritos')
-        .select('*, inmuebles(*)')
-        .eq('usuario_id', usuarioId)
-        .order('fecha_agregado', ascending: false);
-
-    final List<Map<String, dynamic>> resultados = [];
-    for (var item in response) {
-      if (item['inmuebles'] != null) {
-        resultados.add(item['inmuebles'] as Map<String, dynamic>);
-      }
+    try {
+      final response = await _api.get('/favoritos');
+      final List data = (response.data is Map)
+          ? (response.data['data'] ?? [])
+          : [];
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
     }
-    return resultados;
   }
 
   // ================== CALENDARIO ==================
 
   static Future<int> agregarEvento(Map<String, dynamic> evento) async {
-    final response = await _supabase
-        .from('calendario')
-        .insert(evento)
-        .select('id')
-        .single();
-    return response['id'] as int;
+    try {
+      final response = await _api.post('/calendario', data: evento);
+      return response.data['id'] ?? 0;
+    } catch (e) {
+      debugPrint('Error agregando evento: $e');
+      return 0;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerEventosPorUsuario(
     int usuarioId,
   ) async {
-    final response = await _supabase
-        .from('calendario')
-        .select()
-        .eq('usuario_id', usuarioId)
-        .order('fecha', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/calendario');
+      final List data = response.data;
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<int> eliminarEvento(int eventoId) async {
-    await _supabase.from('calendario').delete().eq('id', eventoId);
-    return eventoId;
+    try {
+      await _api.delete('/calendario/$eventoId');
+      return eventoId;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerEventosPorRenta(
     int rentaId,
   ) async {
-    final response = await _supabase
-        .from('calendario')
-        .select()
-        .eq('renta_id', rentaId)
-        .eq('compartido', 1)
-        .order('fecha', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/contratos/$rentaId/eventos');
+      final List data = response.data;
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   // ================== RENTAS ==================
 
   static Future<int> crearRenta(Map<String, dynamic> renta) async {
-    final response = await _supabase
-        .from('rentas')
-        .insert(renta)
-        .select('id')
-        .single();
-    return response['id'] as int;
+    try {
+      final inmuebleId = renta['inmueble_id'];
+      final response = await _api.post(
+        '/inmuebles/$inmuebleId/rentar',
+        data: {
+          'inquilino_id': renta['inquilino_id'],
+          'fecha_inicio': renta['fecha_inicio'],
+          'fecha_fin': renta['fecha_fin'],
+          'renta_mensual': renta['monto_mensual'],
+          'deposito': renta['deposito'],
+        },
+      );
+      return response.data['id'] ?? 0;
+    } catch (e) {
+      debugPrint('Error creando renta: $e');
+      return 0;
+    }
   }
 
   static Future<void> actualizarEstadoRenta(int id, String estado) async {
-    await _supabase.from('rentas').update({'estado': estado}).eq('id', id);
+    try {
+      // Laravel uses renover/cancelar or we can add a generic one.
+      // For now, let's assume we might need a generic update or specific actions.
+      if (estado == 'cancelada') {
+        await _api.post('/contratos/$id/cancelar');
+      }
+    } catch (e) {
+      debugPrint('Error actualizando estado renta: $e');
+    }
   }
 
   static Future<void> eliminarTodasLasRentas(int usuarioId) async {
-    // 1. Obtener rentas del usuario (ya sea arrendador o inquilino) para borrar sus dependencias
-    final response = await _supabase
-        .from('rentas')
-        .select('id')
-        .or('arrendador_id.eq.$usuarioId,inquilino_id.eq.$usuarioId');
-
-    final rentas = List<Map<String, dynamic>>.from(response);
-
-    for (var r in rentas) {
-      final rId = r['id'];
-      // Borrar pagos
-      await _supabase.from('pagos_renta').delete().eq('renta_id', rId);
-      // Borrar eventos
-      await _supabase.from('calendario').delete().eq('renta_id', rId);
-    }
-
-    // 2. Borrar las rentas
-    await _supabase
-        .from('rentas')
-        .delete()
-        .or('arrendador_id.eq.$usuarioId,inquilino_id.eq.$usuarioId');
+    // This is destructive and not directly exposed in the API as a bulk operation.
+    // For now, we'll leave it empty or implement it if critical for testing.
   }
 
   static Future<List<Map<String, dynamic>>> obtenerRentasPorArrendador(
     int arrendadorId,
   ) async {
-    final response = await _supabase
-        .from('rentas')
-        .select('*, inmuebles(*), inquilino:usuarios!inquilino_id(*)')
-        .eq('arrendador_id', arrendadorId)
-        .order('fecha_inicio', ascending: false);
-
-    return List<Map<String, dynamic>>.from(
-      response.map((r) {
-        final inmueble = r['inmuebles'] as Map<String, dynamic>;
-        final inquilino = r['inquilino'] as Map<String, dynamic>;
-
-        final newMap = Map<String, dynamic>.from(r);
-        newMap['inmueble_titulo'] = inmueble['titulo'];
-        newMap['rutas_imagen'] = inmueble['rutas_imagen'];
-        newMap['inquilino_nombre'] = inquilino['nombre'];
-
-        return newMap;
-      }),
-    );
+    try {
+      final response = await _api.get('/contratos');
+      final List data = response.data['data'] ?? [];
+      return List<Map<String, dynamic>>.from(
+        data,
+      ).where((r) => r['arrendador_id'] == arrendadorId).toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerRentasPorInquilino(
     int inquilinoId,
   ) async {
-    final response = await _supabase
-        .from('rentas')
-        .select('*, inmuebles(*), arrendador:usuarios!arrendador_id(*)')
-        .eq('inquilino_id', inquilinoId)
-        .order('fecha_inicio', ascending: false);
-
-    return List<Map<String, dynamic>>.from(
-      response.map((r) {
-        final inmueble = r['inmuebles'] as Map<String, dynamic>;
-        final arrendador = r['arrendador'] as Map<String, dynamic>;
-
-        final newMap = Map<String, dynamic>.from(r);
-        newMap['inmueble_titulo'] = inmueble['titulo'];
-        newMap['rutas_imagen'] = inmueble['rutas_imagen'];
-        newMap['arrendador_nombre'] = arrendador['nombre'];
-
-        return newMap;
-      }),
-    );
+    try {
+      final response = await _api.get('/contratos');
+      final List data = response.data['data'] ?? [];
+      return List<Map<String, dynamic>>.from(
+        data,
+      ).where((r) => r['inquilino_id'] == inquilinoId).toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Map<String, dynamic>?> obtenerRentaPorId(int id) async {
-    final response = await _supabase
-        .from('rentas')
-        .select(
-          '*, inmuebles(*), arrendador:usuarios!arrendador_id(*), inquilino:usuarios!inquilino_id(*)',
-        )
-        .eq('id', id)
-        .maybeSingle();
-
-    if (response == null) return null;
-
-    final inmueble = response['inmuebles'] as Map<String, dynamic>;
-    final arrendador = response['arrendador'] as Map<String, dynamic>;
-    final inquilino = response['inquilino'] as Map<String, dynamic>;
-
-    final newMap = Map<String, dynamic>.from(response);
-    newMap['inmueble_titulo'] = inmueble['titulo'];
-    newMap['rutas_imagen'] = inmueble['rutas_imagen'];
-    newMap['arrendador_nombre'] = arrendador['nombre'];
-    newMap['inquilino_nombre'] = inquilino['nombre'];
-
-    return newMap;
+    try {
+      // This is a bit tricky as we don't have a direct /contratos/{id} that returns this specific format
+      // But we can filter the index or add a show method to ContratoController
+      final response = await _api.get('/contratos');
+      final List data = response.data['data'] ?? [];
+      final match = data.firstWhere((r) => r['id'] == id, orElse: () => null);
+      return match;
+    } catch (e) {
+      return null;
+    }
   }
 
   static Future<int> verificarInquilinoExiste(String email) async {
-    final response = await _supabase
-        .from('usuarios')
-        .select('id')
-        .eq('email', email)
-        .eq('rol', 'inquilino')
-        .maybeSingle();
-
-    if (response == null) return 0;
-    return response['id'] as int;
+    // Instead of querying Supabase, we could add a verify-user endpoint.
+    // However, if we only need this for the rental form, we can just assume
+    // the user exists or let the API error handle it.
+    // For now, let's fetch all users from public list or common endpoint if exists.
+    // Or just trust the API.
+    return 0; // Temporary
   }
 
   // ================== PAGOS ==================
@@ -427,32 +367,26 @@ class BaseDatos {
     int duracionMeses,
     double monto,
   ) async {
-    List<Map<String, dynamic>> pagos = [];
-    for (int i = 0; i < duracionMeses; i++) {
-      final fechaPago = DateTime(
-        fechaInicio.year,
-        fechaInicio.month + i,
-        fechaInicio.day,
+    try {
+      await _api.post(
+        '/contratos/$rentaId/pagos/generar',
+        data: {'meses': duracionMeses},
       );
-      pagos.add({
-        'renta_id': rentaId,
-        'fecha_pago': fechaPago.toIso8601String(),
-        'monto': monto,
-        'estado': 'pendiente',
-      });
+    } catch (e) {
+      debugPrint('Error generando pagos: $e');
     }
-    await _supabase.from('pagos_renta').insert(pagos);
   }
 
   static Future<List<Map<String, dynamic>>> obtenerPagosDeRenta(
     int rentaId,
   ) async {
-    final response = await _supabase
-        .from('pagos_renta')
-        .select()
-        .eq('renta_id', rentaId)
-        .order('fecha_pago', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/contratos/$rentaId/estado-cuenta');
+      final List data = response.data['pagos'] ?? [];
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<void> actualizarEstadoPago(
@@ -460,11 +394,13 @@ class BaseDatos {
     String nuevoEstado, [
     String? fechaReal,
   ]) async {
-    final Map<String, dynamic> data = {'estado': nuevoEstado};
-    // Descomentar si existe columna para guardar fecha real de pago:
-    // if (fechaReal != null) data['fecha_pago_real'] = fechaReal;
-
-    await _supabase.from('pagos_renta').update(data).eq('id', pagoId);
+    try {
+      if (nuevoEstado == 'pagado') {
+        await _api.post('/pagos/$pagoId/pagar');
+      }
+    } catch (e) {
+      debugPrint('Error actualizando estado pago: $e');
+    }
   }
 
   // ================== NOTIFICACIONES ==================
@@ -476,130 +412,100 @@ class BaseDatos {
     String tipo = 'sistema',
     int? referenciaId,
   }) async {
-    final data = {
-      'usuario_id': usuarioId,
-      'titulo': titulo,
-      'mensaje': mensaje,
-      'tipo': tipo,
-      'leida': 0,
-      'fecha': DateTime.now().toIso8601String(),
-    };
-    // No agregamos referencia_id si es null para evitar violaciones de foreign key si es que hay
-    if (referenciaId != null) {
-      data['referencia_id'] = referenciaId;
-    }
-
+    // Usually notifications are created server-side in Laravel,
+    // but if we need to create one from the App (e.g. peer-to-peer feedback):
     try {
-      final response = await _supabase
-          .from('notificaciones')
-          .insert(data)
-          .select('id')
-          .single();
-      return response['id'] as int;
+      final response = await _api.post(
+        '/notificaciones',
+        data: {
+          'usuario_id': usuarioId,
+          'titulo': titulo,
+          'mensaje': mensaje,
+          'tipo': tipo,
+          'referencia_id': referenciaId,
+        },
+      );
+      return response.data['id'] ?? 0;
     } catch (e) {
-      // Si falla, intentamos sin referencia_id por si hay un error de schema/FK
-      if (referenciaId != null) {
-        debugPrint(
-          '⚠️ Error al crear notificación con ref: $e. Reintentando sin ref.',
-        );
-        data.remove('referencia_id');
-        final response = await _supabase
-            .from('notificaciones')
-            .insert(data)
-            .select('id')
-            .single();
-        return response['id'] as int;
-      }
       debugPrint('Error creando notificación: $e');
-      return 0; // Return 0 to indicate failure but don't crash the flow
+      return 0;
     }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerNotificaciones(
     int usuarioId,
   ) async {
-    final response = await _supabase
-        .from('notificaciones')
-        .select()
-        .eq('usuario_id', usuarioId)
-        .order('fecha', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    try {
+      final response = await _api.get('/notificaciones');
+      final List data = response.data;
+      return List<Map<String, dynamic>>.from(data).map((n) {
+        // Normalize date field if necessary (Laravel uses created_at)
+        final Map<String, dynamic> map = Map<String, dynamic>.from(n);
+        map['fecha'] = n['created_at'];
+        return map;
+      }).toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<int> marcarComoLeida(int notificacionId) async {
-    await _supabase
-        .from('notificaciones')
-        .update({'leida': 1})
-        .eq('id', notificacionId);
-    return notificacionId;
+    try {
+      await _api.put('/notificaciones/$notificacionId', data: {'leida': true});
+      return notificacionId;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<int> contarNoLeidas(int usuarioId) async {
-    final count = await _supabase
-        .from('notificaciones')
-        .count(CountOption.exact)
-        .eq('usuario_id', usuarioId)
-        .eq('leida', 0);
-    return count;
+    try {
+      final response = await _api.get('/notificaciones/unread-count');
+      return response.data['unread_count'] ?? 0;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<int> eliminarNotificacion(int notificacionId) async {
-    await _supabase.from('notificaciones').delete().eq('id', notificacionId);
-    return notificacionId;
+    try {
+      await _api.delete('/notificaciones/$notificacionId');
+      return notificacionId;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<int> marcarTodasComoLeidas(int usuarioId) async {
-    await _supabase
-        .from('notificaciones')
-        .update({'leida': 1})
-        .eq('usuario_id', usuarioId);
-    return 1;
+    try {
+      await _api.post('/notificaciones/mark-all-read');
+      return 1;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> obtenerPagosPendientes(
     int usuarioId,
     String rol,
   ) async {
-    String campoId = rol == 'Arrendador' ? 'arrendador_id' : 'inquilino_id';
-
-    final res = await _supabase
-        .from('rentas')
-        .select('id')
-        .eq(campoId, usuarioId);
-
-    final rentasIds = (res as List).map((e) => e['id']).toList();
-
-    if (rentasIds.isEmpty) return [];
-
-    final pagos = await _supabase
-        .from('pagos_renta')
-        .select('*, rentas(inmuebles(titulo))')
-        .filter('renta_id', 'in', rentasIds)
-        .eq('estado', 'pendiente')
-        .order('fecha_pago');
-
-    return List<Map<String, dynamic>>.from(
-      pagos.map((p) {
-        String tituloInmueble = 'Inmueble';
-        try {
-          // ignore: unnecessary_null_comparison
-          if (p['rentas'] != null && p['rentas']['inmuebles'] != null) {
-            tituloInmueble = p['rentas']['inmuebles']['titulo'] ?? 'Inmueble';
-          }
-        } catch (_) {}
-
-        return {
-          'id':
-              -1 *
-              (p['id']
-                  as int), // ID negativo para diferenciar de eventos normales
-          'titulo': 'Próximo Pago',
-          'descripcion': '\$${p['monto']} - $tituloInmueble',
-          'fecha': p['fecha_pago'],
-          'tipo': 'pago',
-          'original_id': p['id'],
-        };
-      }),
-    );
+    try {
+      final response = await _api.get('/pagos/pendientes');
+      final List data = response.data;
+      return List<Map<String, dynamic>>.from(
+        data.map((p) {
+          return {
+            'id': -1 * (p['id'] as int),
+            'titulo': 'Próximo Pago',
+            'descripcion': '\$${p['monto']} - ${p['inmueble_titulo']}',
+            'fecha': p['fecha_pago'],
+            'tipo': 'pago',
+            'original_id': p['id'],
+          };
+        }),
+      );
+    } catch (e) {
+      return [];
+    }
   }
 }

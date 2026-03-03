@@ -11,10 +11,13 @@ import 'package:arrendaoco/view/gestionar_rentas.dart';
 import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/view/editar_perfil.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
+import 'package:arrendaoco/services/api_service.dart';
+import 'package:arrendaoco/services/auth_service.dart';
+import 'package:arrendaoco/view/inquilino_home.dart';
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
@@ -24,39 +27,51 @@ class PerfilScreen extends StatefulWidget {
 }
 
 class _PerfilScreenState extends State<PerfilScreen> {
+  final ApiService _api = ApiService();
+  final AuthService _auth = AuthService();
   bool _notificacionesActivas = true;
-
-  // Real-time streams
-  late Stream<List<Map<String, dynamic>>> _userStream;
-  late Stream<List<Map<String, dynamic>>> _favoritosStream;
-  late Stream<List<Map<String, dynamic>>> _inmueblesStream;
+  bool _isLoading = true;
+  Map<String, dynamic>? _userData;
+  int _favoritosCount = 0;
+  int _inmueblesCount = 0;
 
   @override
   void initState() {
     super.initState();
-    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
+    _refreshData();
+  }
 
-    // Stream del usuario actual
-    _userStream = Supabase.instance.client
-        .from('users')
-        .stream(primaryKey: ['id'])
-        .eq('id', uid);
+  Future<void> _refreshData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
 
-    // Stream de favoritos
-    _favoritosStream = Supabase.instance.client
-        .from('favoritos')
-        .stream(primaryKey: ['id'])
-        .eq('usuario_id', uid);
+    try {
+      final userRes = await _api.get('/me');
+      final favsRes = await _api.get('/favoritos');
 
-    // Stream de inmuebles (para contar publicados)
-    if (SesionActual.rol == 'Arrendador' ||
-        SesionActual.rol == 'Administrador') {
-      _inmueblesStream = Supabase.instance.client
-          .from('inmuebles')
-          .stream(primaryKey: ['id'])
-          .eq('propietario_id', uid);
-    } else {
-      _inmueblesStream = Stream.value([]);
+      int inmueblesCount = 0;
+      if (SesionActual.esPropietario) {
+        final propsRes = await _api.get('/inmuebles');
+        if (propsRes.statusCode == 200) {
+          inmueblesCount = (propsRes.data['data'] as List).length;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          if (userRes.statusCode == 200) {
+            _userData = userRes.data['data'];
+          }
+          if (favsRes.statusCode == 200) {
+            _favoritosCount = (favsRes.data['data'] as List).length;
+          }
+          _inmueblesCount = inmueblesCount;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error actualizando perfil: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -89,6 +104,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
     );
 
     if (confirmar == true && context.mounted) {
+      LottieLoading.showLoadingDialog(context, message: 'Cerrando sesión...');
+      await _auth.signOut();
+
       SesionActual.usuarioId = null;
       SesionActual.nombre = '';
       SesionActual.email = '';
@@ -97,11 +115,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
       FCMService.dispose();
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
+      if (context.mounted) {
+        LottieLoading.hideLoadingDialog(context);
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -112,19 +133,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _userStream,
-              builder: (context, snapshot) {
-                String? fotoPerfilUrl;
-                String displayName = SesionActual.nombre;
-
-                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                  final userData = snapshot.data!.first;
-                  fotoPerfilUrl = userData['foto_perfil'];
-                  displayName = userData['nombre'] ?? displayName;
-                  // Sync singleton
-                  SesionActual.nombre = displayName;
+            child: Builder(
+              builder: (context) {
+                if (_isLoading) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(vertical: 80),
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(color: Colors.white),
+                  );
                 }
+
+                String? fotoPerfilUrl = _userData?['foto_perfil'];
+                String displayName =
+                    _userData?['nombre'] ?? SesionActual.nombre;
+
+                // Sync singleton
+                SesionActual.nombre = displayName;
 
                 return Container(
                   padding: const EdgeInsets.only(bottom: 30),
@@ -182,14 +206,35 @@ class _PerfilScreenState extends State<PerfilScreen> {
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: Text(
+                            SesionActual.rol.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -229,34 +274,21 @@ class _PerfilScreenState extends State<PerfilScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: _favoritosStream,
-                      builder: (context, snapshot) {
-                        final count = snapshot.data?.length ?? 0;
-                        return _StatCard(
-                          icon: Icons.favorite_rounded,
-                          title: 'Favoritos',
-                          value: '$count',
-                          color: MiTema.rojo,
-                        );
-                      },
+                    child: _StatCard(
+                      icon: Icons.favorite_rounded,
+                      title: 'Favoritos',
+                      value: '$_favoritosCount',
+                      color: MiTema.rojo,
                     ),
                   ),
-                  if (SesionActual.rol == 'Arrendador' ||
-                      SesionActual.rol == 'Administrador') ...[
+                  if (SesionActual.esPropietario) ...[
                     const SizedBox(width: 12),
                     Expanded(
-                      child: StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: _inmueblesStream,
-                        builder: (context, snapshot) {
-                          final count = snapshot.data?.length ?? 0;
-                          return _StatCard(
-                            icon: Icons.home_work_rounded,
-                            title: 'Publicados',
-                            value: '$count',
-                            color: MiTema.vino,
-                          );
-                        },
+                      child: _StatCard(
+                        icon: Icons.home_work_rounded,
+                        title: 'Publicados',
+                        value: '$_inmueblesCount',
+                        color: MiTema.vino,
                       ),
                     ),
                   ],
@@ -277,8 +309,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Arrendador Panel
-          if (SesionActual.rol == 'Arrendador' ||
-              SesionActual.rol == 'Administrador')
+          if (SesionActual.esPropietario)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
               sliver: SliverToBoxAdapter(
@@ -356,8 +387,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               ),
             ),
 
-          if (SesionActual.rol == 'Arrendador' ||
-              SesionActual.rol == 'Administrador')
+          if (SesionActual.esPropietario)
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Sections
@@ -386,7 +416,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         icon: Icons.key_rounded,
                         title: 'Mis Rentas',
                         onTap: () {
-                          if (SesionActual.rol == 'Arrendador') {
+                          if (SesionActual.esPropietario) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -407,9 +437,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       _SettingsTile(
                         icon: Icons.calendar_month_rounded,
                         title: 'Calendario',
-                        showDivider: false,
+                        showDivider: SesionActual.tieneMultiplesRoles,
                         onTap: () {
-                          if (SesionActual.rol == 'Arrendador') {
+                          if (SesionActual.esPropietario) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -428,6 +458,38 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           }
                         },
                       ),
+                      if (SesionActual.tieneMultiplesRoles)
+                        _SettingsTile(
+                          icon: Icons.swap_horiz_rounded,
+                          title: SesionActual.esPropietario
+                              ? 'Cambiar a Dashboard Inquilino'
+                              : 'Cambiar a Dashboard Arrendador',
+                          showDivider: false,
+                          onTap: () {
+                            final uid = SesionActual.usuarioId ?? '';
+                            if (SesionActual.esPropietario) {
+                              // Cambiar a Inquilino
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      InquilinoHomeScreen(usuarioId: uid),
+                                ),
+                                (route) => false,
+                              );
+                            } else {
+                              // Cambiar a Arrendador
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ArrendadorScreen(usuarioId: uid),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          },
+                        ),
                     ],
                   ),
                 ),

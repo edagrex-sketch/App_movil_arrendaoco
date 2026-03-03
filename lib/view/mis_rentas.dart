@@ -8,9 +8,6 @@ import 'package:arrendaoco/view/detalle_renta.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:async';
-
 import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/services/notificaciones_service.dart';
 
@@ -22,8 +19,9 @@ class MisRentasScreen extends StatefulWidget {
 }
 
 class _MisRentasScreenState extends State<MisRentasScreen> {
-  Stream<List<Map<String, dynamic>>>? _rentasStream;
-  Stream<List<Map<String, dynamic>>>? _eventosStream;
+  List<Map<String, dynamic>> _rentas = [];
+  List<Map<String, dynamic>> _eventos = [];
+  bool _isLoading = true;
 
   DateTime _selectedDate = DateTime.now();
   int _currentRentIndex = 0;
@@ -34,324 +32,245 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     _refreshData();
   }
 
-  void _refreshData() {
+  Future<void> _refreshData() async {
+    setState(() => _isLoading = true);
     final usuarioId = SesionActual.usuarioId;
     final uid = int.tryParse(usuarioId ?? '0') ?? 0;
 
-    setState(() {
-      // Stream de Rentas (Inquilino)
-      _rentasStream = Supabase.instance.client
-          .from('rentas')
-          .stream(primaryKey: ['id'])
-          .eq('inquilino_id', uid)
-          .order('fecha_inicio', ascending: false)
-          .map(
-            (list) => list,
-          ) // Passthrough simple necesario a veces para casting
-          .asyncMap((list) async {
-            // Enriquecer datos con relaciones (Inmueble, Arrendador)
-            final enrichedList = <Map<String, dynamic>>[];
-            for (var r in list) {
-              final rentaId = r['id'];
-              final fullData = await BaseDatos.obtenerRentaPorId(rentaId);
-              if (fullData != null) {
-                enrichedList.add(fullData);
-              }
-            }
-            return enrichedList;
-          });
-
-      // Stream Calendario
-      _eventosStream = Supabase.instance.client
-          .from('calendario')
-          .stream(primaryKey: ['id'])
-          .eq('usuario_id', uid)
-          .order('fecha', ascending: true);
-    });
+    try {
+      final rentas = await BaseDatos.obtenerRentasPorInquilino(uid);
+      if (mounted) {
+        setState(() {
+          _rentas = rentas;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Widget build(BuildContext context) {
-    return _rentasStream == null
-        ? Center(child: CircularProgressIndicator(color: ArrendaColors.accent))
-        : SingleChildScrollView(
-            child: Column(
+    if (_isLoading) {
+      return Center(
+        child: CircularProgressIndicator(color: ArrendaColors.accent),
+      );
+    }
+
+    // Filtrar por estado
+    final solicitudes = _rentas
+        .where((r) => r['estado'] == 'pendiente')
+        .toList();
+    final activas = _rentas.where((r) => r['estado'] == 'activa').toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Sección de Rentas (Solicitudes y Activas)
+          if (_rentas.isEmpty)
+            _buildEmptyState()
+          else
+            Column(
               children: [
-                // Sección de Rentas (Solicitudes y Activas)
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _rentasStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return SizedBox(
-                        height: 200,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: MiTema.celeste,
-                          ),
-                        ),
-                      );
-                    }
-
-                    final todasLasRentas = snapshot.data ?? [];
-
-                    // Filtrar por estado
-                    final solicitudes = todasLasRentas
-                        .where((r) => r['estado'] == 'pendiente')
-                        .toList();
-                    final activas = todasLasRentas
-                        .where((r) => r['estado'] == 'activa')
-                        .toList();
-
-                    if (todasLasRentas.isEmpty) {
-                      return _buildEmptyState();
-                    }
-
-                    return Column(
+                // 1. SOLICITUDES PENDIENTES
+                if (solicitudes.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
                       children: [
-                        // 1. SOLICITUDES PENDIENTES
-                        if (solicitudes.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.mark_email_unread_rounded,
-                                  color: Colors.orange[700],
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Solicitudes Pendientes',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: MiTema.azul,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        Icon(
+                          Icons.mark_email_unread_rounded,
+                          color: Colors.orange[700],
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Solicitudes Pendientes',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: MiTema.azul,
                           ),
-                          const SizedBox(height: 10),
-                          ListView.builder(
-                            physics: const NeverScrollableScrollPhysics(),
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: solicitudes.length,
-                            itemBuilder: (context, index) =>
-                                _buildSolicitudCard(solicitudes[index]),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // 2. RENTAS ACTIVAS (Carousel)
-                        if (activas.isNotEmpty) ...[
-                          SizedBox(
-                            height: 340,
-                            child: PageView.builder(
-                              controller: PageController(viewportFraction: 0.9),
-                              onPageChanged: (index) {
-                                setState(() => _currentRentIndex = index);
-                              },
-                              itemCount: activas.length,
-                              itemBuilder: (context, index) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  child: _buildRentaCard(activas[index]),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          if (activas.length > 1)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(
-                                activas.length,
-                                (index) => Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: _currentRentIndex == index
-                                        ? MiTema.celeste
-                                        : Colors.grey[300],
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ] else if (solicitudes.isEmpty) ...[
-                          // Si no hay activas ni solicitudes (pero la lista total no estaba vacía - caso rechazada?)
-                          _buildEmptyState(),
-                        ],
+                        ),
                       ],
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                // CALENDARIO PREMIUM
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_month_rounded,
-                        color: MiTema.vino,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Calendario de Pagos',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: MiTema.azul,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
+                  const SizedBox(height: 10),
+                  ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: solicitudes.length,
+                    itemBuilder: (context, index) =>
+                        _buildSolicitudCard(solicitudes[index]),
                   ),
-                  child: StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _eventosStream,
-                    builder: (context, snapshot) {
-                      final events = snapshot.data ?? [];
-                      return Column(
-                        children: [
-                          // Header Calendario
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.chevron_left_rounded,
-                                    color: MiTema.azul,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _selectedDate = DateTime(
-                                        _selectedDate.year,
-                                        _selectedDate.month - 1,
-                                      );
-                                    });
-                                  },
-                                ),
-                                Text(
-                                  '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: MiTema.azul,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: MiTema.azul,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _selectedDate = DateTime(
-                                        _selectedDate.year,
-                                        _selectedDate.month + 1,
-                                      );
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          _buildCalendarGrid(events),
-                          const SizedBox(height: 16),
-                        ],
-                      );
-                    },
-                  ),
-                ),
+                  const SizedBox(height: 24),
+                ],
 
-                const SizedBox(height: 24),
-
-                // Lista de Eventos / Pagos
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.event_available_rounded,
-                        color: MiTema.celeste,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Próximos Eventos',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: MiTema.azul,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: _eventosStream,
-                  builder: (context, snapshot) {
-                    final eventos = snapshot.data ?? [];
-
-                    // TODO: Aquí podríamos mezclar con los días de pago de las rentas activas
-                    // Pero por ahora mostramos los eventos reales
-
-                    if (eventos.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Center(
-                          child: Text(
-                            'No hay eventos este mes',
-                            style: TextStyle(color: Colors.grey[400]),
-                          ),
-                        ),
-                      );
-                    }
-
-                    return ListView.separated(
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: eventos.length,
-                      separatorBuilder: (c, i) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        return _buildEventoCard(eventos[index]);
+                // 2. RENTAS ACTIVAS (Carousel)
+                if (activas.isNotEmpty) ...[
+                  SizedBox(
+                    height: 340,
+                    child: PageView.builder(
+                      controller: PageController(viewportFraction: 0.9),
+                      onPageChanged: (index) {
+                        setState(() => _currentRentIndex = index);
                       },
-                    );
-                  },
-                ),
-                const SizedBox(height: 40),
+                      itemCount: activas.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: _buildRentaCard(activas[index]),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (activas.length > 1)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        activas.length,
+                        (index) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _currentRentIndex == index
+                                ? MiTema.celeste
+                                : Colors.grey[300],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
-          );
+
+          const SizedBox(height: 24),
+
+          // CALENDARIO PREMIUM
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_month_rounded,
+                  color: MiTema.vino,
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Calendario de Pagos',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: MiTema.azul,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Header Calendario
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_left_rounded,
+                          color: MiTema.azul,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDate = DateTime(
+                              _selectedDate.year,
+                              _selectedDate.month - 1,
+                            );
+                          });
+                        },
+                      ),
+                      Text(
+                        '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: MiTema.azul,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_right_rounded,
+                          color: MiTema.azul,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDate = DateTime(
+                              _selectedDate.year,
+                              _selectedDate.month + 1,
+                            );
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                _buildCalendarGrid(_eventos),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Lista de Eventos / Pagos
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.event_available_rounded,
+                  color: MiTema.celeste,
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Próximos Eventos',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: MiTema.azul,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          _buildEventList(),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
   }
 
   Future<void> _aceptarRenta(int id, int arrendadorId) async {
@@ -1037,6 +956,31 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
       'DIC',
     ];
     return months[month - 1];
+  }
+
+  Widget _buildEventList() {
+    if (_eventos.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(40),
+        child: Center(
+          child: Text(
+            'No hay eventos este mes',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemCount: _eventos.length,
+      separatorBuilder: (c, i) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        return _buildEventoCard(_eventos[index]);
+      },
+    );
   }
 }
 

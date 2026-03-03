@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
-import 'package:arrendaoco/model/bd.dart';
-import 'package:arrendaoco/services/storage_service.dart';
 import 'package:arrendaoco/sensors/ubicacion.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +10,9 @@ import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:arrendaoco/services/api_service.dart';
+import 'package:dio/dio.dart' as dio;
+import 'package:path/path.dart' as p;
 
 class RegistrarInmuebleScreen extends StatefulWidget {
   final String propietarioId;
@@ -32,8 +33,7 @@ class RegistrarInmuebleScreen extends StatefulWidget {
 
 class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
     with SingleTickerProviderStateMixin {
-  final StorageService _storageService = StorageService();
-
+  final ApiService _api = ApiService();
   final _formKey = GlobalKey<FormState>();
   final _tituloController = TextEditingController();
   final _descripcionController = TextEditingController();
@@ -214,69 +214,79 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
     LottieLoading.showLoadingDialog(context, message: '$accion inmueble...');
 
     try {
-      List<String> imagePaths = [];
-      String tempId = DateTime.now().millisecondsSinceEpoch.toString();
-
-      if (_imagenesSeleccionadas.isNotEmpty) {
-        imagePaths = await _storageService.uploadPropertyImages(
-          propertyId: widget.inmuebleId ?? tempId,
-          imageFiles: _imagenesSeleccionadas,
-        );
-
-        if (imagePaths.isEmpty) {
-          throw Exception('No se pudieron guardar las imágenes.');
-        }
-      } else if (widget.inmuebleData != null) {
-        final rutasViejas = widget.inmuebleData!['rutas_imagen'] as String?;
-        if (rutasViejas != null) imagePaths = rutasViejas.split(',');
-      }
-
-      final datosInmueble = {
+      final dio.FormData formData = dio.FormData.fromMap({
         'titulo': titulo,
         'descripcion': descripcion,
-        'precio': precio,
-        'disponible': _disponible ? 1 : 0,
-        'categoria': _categoriaSeleccionada,
-        'propietario_id': int.tryParse(widget.propietarioId) ?? 0,
+        'renta_mensual': precio,
+        'deposito': precio,
+        'habitaciones': _camas,
+        'banos': _banos,
+        'metros': _tamano == 'Pequeño'
+            ? 50
+            : (_tamano == 'Mediano' ? 100 : 200),
+        'tipo': _categoriaSeleccionada ?? 'Casa',
+        'direccion': 'Ocosingo, Chiapas',
         'latitud': _ubicacionActual!.latitude,
         'longitud': _ubicacionActual!.longitude,
-        'rutas_imagen': imagePaths.join(','),
-        'camas': _camas,
-        'banos': _banos,
-        'tamano': _tamano,
-        'estacionamiento': 0,
-        'mascotas': 0,
-        'visitas': 0,
-        'amueblado': 0,
-        'agua': 0,
-        'wifi': 0,
-      };
+        'estatus': _disponible ? 'disponible' : 'inactivo',
+      });
 
       if (esEdicion) {
-        final id = int.tryParse(widget.inmuebleId.toString()) ?? 0;
-        await BaseDatos.actualizarInmueble(id, datosInmueble);
+        formData.fields.add(const MapEntry('_method', 'PUT'));
+      }
+
+      for (var file in _imagenesSeleccionadas) {
+        formData.files.add(
+          MapEntry(
+            'imagenes[]',
+            await dio.MultipartFile.fromFile(
+              file.path,
+              filename: p.basename(file.path),
+            ),
+          ),
+        );
+      }
+
+      dio.Response response;
+      if (esEdicion) {
+        // Usamos POST con _method: PUT para que Laravel reciba los archivos
+        response = await _api.post(
+          '/inmuebles/${widget.inmuebleId}',
+          data: formData,
+        );
       } else {
-        await BaseDatos.insertarInmueble(datosInmueble);
+        response = await _api.post('/inmuebles', data: formData);
       }
 
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
 
-      await LottieFeedback.showSuccess(
-        context,
-        message: '¡Inmueble guardado localmente!',
-        onComplete: () {
-          if (mounted) {
-            Navigator.pop(context, true);
-          }
-        },
-      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await LottieFeedback.showSuccess(
+          context,
+          message: esEdicion
+              ? '¡Inmueble actualizado!'
+              : '¡Inmueble publicado!',
+          onComplete: () {
+            if (mounted) {
+              Navigator.pop(context, true);
+            }
+          },
+        );
+      } else {
+        throw dio.DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+          message: 'Error del servidor: ${response.statusCode}',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
+      debugPrint('Error al guardar inmueble: $e');
       await LottieFeedback.showError(
         context,
-        message: 'Error al guardar: ${e.toString()}',
+        message: 'Error al conectar con el servidor',
       );
     }
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
@@ -7,12 +6,11 @@ import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/perfil.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
-import 'package:arrendaoco/model/bd.dart';
+import 'package:arrendaoco/view/detalle_inmueble.dart';
+import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
-import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:arrendaoco/view/detalle_inmueble.dart';
+import 'package:arrendaoco/utils/casting.dart';
 
 class ArrendadorScreen extends StatefulWidget {
   final String usuarioId;
@@ -176,277 +174,319 @@ class InicioFeed extends StatefulWidget {
 }
 
 class InicioFeedState extends State<InicioFeed> {
-  late Stream<List<Map<String, dynamic>>> _inmueblesStream;
+  final ApiService _api = ApiService();
+  List<Map<String, dynamic>> _inmuebles = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    final uid = int.tryParse(widget.usuarioId) ?? 0;
-    _inmueblesStream = Supabase.instance.client
-        .from('inmuebles')
-        .stream(primaryKey: ['id'])
-        .eq('propietario_id', uid)
-        .order('id', ascending: false);
+    _cargarInmuebles();
+  }
+
+  Future<void> _cargarInmuebles() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final response = await _api.get('/inmuebles');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data['data'] ?? [];
+        if (mounted) {
+          setState(() {
+            _inmuebles = List<Map<String, dynamic>>.from(data);
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cargando mis inmuebles: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Error al conectar con el servidor';
+        });
+      }
+    }
+  }
+
+  Future<void> _eliminarInmueble(int id) async {
+    try {
+      final response = await _api.delete('/inmuebles/$id');
+      if (response.statusCode == 200) {
+        _cargarInmuebles();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Inmueble eliminado con éxito')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error eliminando inmueble: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _inmueblesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: ArrendaColors.accent),
-          );
-        }
+    if (_isLoading) {
+      return Center(
+        child: CircularProgressIndicator(color: ArrendaColors.accent),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error al cargar inmuebles'));
-        }
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _cargarInmuebles,
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
 
-        final inmuebles = snapshot.data ?? [];
-
-        if (inmuebles.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.house_siding_rounded,
-                  size: 80,
-                  color: Colors.grey[300],
+    if (_inmuebles.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _cargarInmuebles,
+        child: ListView(
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Icon(Icons.house_siding_rounded, size: 80, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                'Aún no has publicado inmuebles',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Aún no has publicado inmuebles',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _cargarInmuebles,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(20),
+        itemCount: _inmuebles.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 20),
+        itemBuilder: (context, index) {
+          final i = _inmuebles[index];
+          final titulo = i['titulo'] ?? '';
+          final descripcion = i['descripcion'] ?? '';
+          final precio = Parser.toDouble(i['renta_mensual']);
+          final categoria = i['tipo'] ?? '';
+          final primeraRuta = i['imagen_portada'];
+
+          return StunningCard(
+            padding: EdgeInsets.zero,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetalleInmuebleScreen(
+                    inmueble: i,
+                    usuarioId: widget.usuarioId,
+                  ),
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      height: 200,
+                      width: double.infinity,
+                      color: Colors.grey[200],
+                      child: primeraRuta != null
+                          ? ImagenDinamica(
+                              ruta: primeraRuta,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : Icon(
+                              Icons.image_not_supported,
+                              color: Colors.grey[400],
+                            ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          categoria.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              titulo.toString(),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: ArrendaColors.primary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '\$${precio.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: ArrendaColors.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        descripcion.toString(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.grey[600], height: 1.4),
+                      ),
+                      const SizedBox(height: 16),
+                      Divider(color: Colors.grey[200]),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RegistrarInmuebleScreen(
+                                    propietarioId: widget.usuarioId,
+                                    inmuebleId: i['id'].toString(),
+                                    inmuebleData: i,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.edit_rounded,
+                              size: 20,
+                              color: ArrendaColors.accent,
+                            ),
+                            label: const Text(
+                              'Editar',
+                              style: TextStyle(
+                                color: ArrendaColors.accent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  title: const Text(
+                                    'Eliminar propiedad',
+                                    style: TextStyle(
+                                      color: ArrendaColors.primary,
+                                    ),
+                                  ),
+                                  content: const Text(
+                                    '¿Estás seguro? Esta acción no se puede deshacer.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text(
+                                        'Eliminar',
+                                        style: TextStyle(
+                                          color: ArrendaColors.error,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                await _eliminarInmueble(i['id'] as int);
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.delete_rounded,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                            label: const Text(
+                              'Eliminar',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           );
-        }
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(20),
-          itemCount: inmuebles.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 20),
-          itemBuilder: (context, index) {
-            final i = inmuebles[index];
-            final titulo = i['titulo'] ?? '';
-            final descripcion = i['descripcion'] ?? '';
-            final precio = i['precio'] ?? 0;
-            final categoria = i['categoria'] ?? '';
-
-            final rutasRaw = i['rutas_imagen'] as String? ?? '';
-            final rutas = rutasRaw.isEmpty ? [] : rutasRaw.split(',');
-            final primeraRuta = rutas.isNotEmpty ? rutas.first : null;
-
-            return StunningCard(
-              padding: EdgeInsets.zero,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DetalleInmuebleScreen(
-                      inmueble: i,
-                      usuarioId: widget.usuarioId,
-                    ),
-                  ),
-                );
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        color: Colors.grey[200],
-                        child: primeraRuta != null
-                            ? ImagenDinamica(
-                                ruta: primeraRuta,
-                                height: 200,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              )
-                            : Icon(
-                                Icons.image_not_supported,
-                                color: Colors.grey[400],
-                              ),
-                      ),
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            categoria.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                titulo.toString(),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: ArrendaColors.primary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              '\$${precio.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                                color: ArrendaColors.error,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          descripcion.toString(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Divider(color: Colors.grey[200]),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton.icon(
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        RegistrarInmuebleScreen(
-                                          propietarioId: widget.usuarioId,
-                                          inmuebleId: i['id'].toString(),
-                                          inmuebleData: i,
-                                        ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(
-                                Icons.edit_rounded,
-                                size: 20,
-                                color: ArrendaColors.accent,
-                              ),
-                              label: const Text(
-                                'Editar',
-                                style: TextStyle(
-                                  color: ArrendaColors.accent,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    title: const Text(
-                                      'Eliminar propiedad',
-                                      style: TextStyle(
-                                        color: ArrendaColors.primary,
-                                      ),
-                                    ),
-                                    content: const Text(
-                                      '¿Estás seguro? Esta acción no se puede deshacer.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, false),
-                                        child: const Text('Cancelar'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, true),
-                                        child: const Text(
-                                          'Eliminar',
-                                          style: TextStyle(
-                                            color: ArrendaColors.error,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-
-                                if (confirm == true) {
-                                  await BaseDatos.eliminarInmueble(
-                                    i['id'] as int,
-                                  );
-                                }
-                              },
-                              icon: const Icon(
-                                Icons.delete_rounded,
-                                size: 20,
-                                color: Colors.grey,
-                              ),
-                              label: const Text(
-                                'Eliminar',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+        },
+      ),
     );
   }
 }

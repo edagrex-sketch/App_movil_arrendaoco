@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/view/notificaciones_screen.dart';
 
 class NotificationBadge extends StatelessWidget {
@@ -10,22 +10,10 @@ class NotificationBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
-          .from('notificaciones')
-          .stream(primaryKey: ['id'])
-          .eq('usuario_id', usuarioId)
-          .order('id'),
+    return FutureBuilder<int>(
+      future: BaseDatos.contarNoLeidas(usuarioId),
       builder: (context, snapshot) {
-        int count = 0;
-        if (snapshot.hasData) {
-          // Filtrar no leídas localmente si el stream devuelve todo
-          // O confiar en que el stream se actualiza.
-          // Nota: .eq('leida', 0) podría no funcionar con .stream() si modificamos 'leida' y queremos que desaparezca de la lista
-          // Mejor traer todas (limitado) y contar.
-          final notifs = snapshot.data!;
-          count = notifs.where((n) => (n['leida'] as int? ?? 0) == 0).length;
-        }
+        int count = snapshot.data ?? 0;
 
         return Stack(
           alignment: Alignment.center,

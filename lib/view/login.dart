@@ -29,7 +29,56 @@ class LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // No animations controller init needed
+    _checkInitialSession();
+  }
+
+  Future<void> _checkInitialSession() async {
+    // Pequeño delay para que la animación se vea
+    await Future.delayed(const Duration(milliseconds: 1000));
+    if (!mounted) return;
+
+    final session = await _authService.checkSession();
+    if (session != null && mounted) {
+      SesionActual.usuarioId = session['id'];
+      SesionActual.nombre = session['nombre'] ?? '';
+      SesionActual.email = session['email'] ?? '';
+      SesionActual.rol = session['rol'] ?? 'inquilino';
+      SesionActual.todosLosRoles = List<String>.from(session['roles'] ?? []);
+      SesionActual.publicId = session['public_id'];
+
+      _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
+    }
+  }
+
+  void _navigateByUserRole(String role, String userId) {
+    final uid = int.tryParse(userId) ?? 0;
+    if (uid > 0) FCMService.initialize(uid);
+
+    final normalizedRole = role.toLowerCase().trim();
+
+    // En el seeder es 'propietario' y 'admin'. En el registro es 'arrendador'.
+    // Aceptamos cualquier variante para ir al dashboard de gestión.
+    final isLandlord =
+        normalizedRole == 'arrendador' ||
+        normalizedRole == 'propietario' ||
+        normalizedRole == 'admin' ||
+        normalizedRole == 'administrador';
+
+    if (isLandlord) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ArrendadorScreen(usuarioId: userId),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InquilinoHomeScreen(usuarioId: userId),
+        ),
+      );
+    }
   }
 
   Future<void> login() async {
@@ -52,40 +101,17 @@ class LoginScreenState extends State<LoginScreen> {
 
       if (result['success']) {
         final userData = result['userData'] as Map<String, dynamic>;
-        final user = result['user'];
 
-        SesionActual.usuarioId = user.uid;
+        SesionActual.usuarioId =
+            userData['id']?.toString() ?? result['user']?.uid;
         SesionActual.nombre = userData['nombre'] ?? '';
         SesionActual.email = userData['email'] ?? '';
-        String roleFromDb = (userData['rol'] as String?) ?? 'Inquilino';
-        if (roleFromDb.isNotEmpty) {
-          roleFromDb =
-              roleFromDb[0].toUpperCase() +
-              roleFromDb.substring(1).toLowerCase();
-        }
-        SesionActual.rol = roleFromDb;
+        SesionActual.rol = userData['rol'] ?? 'inquilino';
+        SesionActual.todosLosRoles = List<String>.from(userData['roles'] ?? []);
         SesionActual.publicId = userData['public_id'];
 
-        if (SesionActual.rol == 'Arrendador') {
-          if (SesionActual.usuarioId != null) {
-            final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
-            if (uid > 0) FCMService.initialize(uid);
-          }
-
-          Navigator.pushReplacement(
-            context,
-            StunningPageRoute(page: ArrendadorScreen(usuarioId: user.uid)),
-          );
-        } else {
-          if (SesionActual.usuarioId != null) {
-            final uid = int.tryParse(SesionActual.usuarioId!) ?? 0;
-            if (uid > 0) FCMService.initialize(uid);
-          }
-
-          Navigator.pushReplacement(
-            context,
-            StunningPageRoute(page: InquilinoHomeScreen(usuarioId: user.uid)),
-          );
+        if (SesionActual.usuarioId != null) {
+          _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
         }
       } else {
         await LottieFeedback.showError(

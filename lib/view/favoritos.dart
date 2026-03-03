@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
-import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:arrendaoco/services/api_service.dart';
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/services.dart';
+import 'package:arrendaoco/utils/casting.dart';
 
 class FavoritosScreen extends StatefulWidget {
   const FavoritosScreen({super.key});
@@ -19,11 +19,10 @@ class FavoritosScreen extends StatefulWidget {
 
 class _FavoritosScreenState extends State<FavoritosScreen>
     with SingleTickerProviderStateMixin {
+  final ApiService _api = ApiService();
   List<Map<String, dynamic>> _favoritos = [];
   bool _cargando = true;
-  StreamSubscription? _sub;
   late AnimationController _controller;
-
   @override
   void initState() {
     super.initState();
@@ -32,35 +31,29 @@ class _FavoritosScreenState extends State<FavoritosScreen>
       duration: const Duration(milliseconds: 800),
     );
     _cargarDatos();
-    _suscribirCambios();
-  }
-
-  void _suscribirCambios() {
-    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-    _sub = Supabase.instance.client
-        .from('favoritos')
-        .stream(primaryKey: ['id'])
-        .eq('usuario_id', uid)
-        .listen((_) {
-          _cargarDatos();
-        });
   }
 
   Future<void> _cargarDatos() async {
-    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-    final datos = await BaseDatos.obtenerFavoritos(uid);
-    if (mounted) {
-      setState(() {
-        _favoritos = datos;
-        _cargando = false;
-        _controller.forward(from: 0);
-      });
+    try {
+      final response = await _api.get('/favoritos');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data['data'] ?? [];
+        if (mounted) {
+          setState(() {
+            _favoritos = List<Map<String, dynamic>>.from(data);
+            _cargando = false;
+            _controller.forward(from: 0);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cargando favoritos: $e');
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -175,11 +168,9 @@ class _FavoritosScreenState extends State<FavoritosScreen>
 
   Widget _buildFavoritoCard(Map<String, dynamic> inmueble) {
     final titulo = inmueble['titulo'] ?? 'Inmueble';
-    final precio = inmueble['precio'] ?? 0;
-    final categoria = inmueble['categoria'] ?? 'General';
-    final imageUrlsRaw = (inmueble['rutas_imagen'] as String?) ?? '';
-    final imageUrls = imageUrlsRaw.isNotEmpty ? imageUrlsRaw.split(',') : [];
-    final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
+    final precio = Parser.toDouble(inmueble['renta_mensual']);
+    final categoria = inmueble['tipo'] ?? 'General';
+    final primeraUrl = inmueble['imagen_portada'];
 
     return StunningCard(
       padding: EdgeInsets.zero,
@@ -268,13 +259,15 @@ class _FavoritosScreenState extends State<FavoritosScreen>
                       child: GestureDetector(
                         onTap: () async {
                           HapticFeedback.mediumImpact();
-                          final uid =
-                              int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-                          if (uid > 0) {
-                            await BaseDatos.eliminarFavorito(
-                              uid,
-                              inmueble['id'],
+                          try {
+                            final response = await _api.post(
+                              '/favoritos/${inmueble['id']}/toggle',
                             );
+                            if (response.statusCode == 200) {
+                              _cargarDatos(); // Recargar lista
+                            }
+                          } catch (e) {
+                            debugPrint('Error eliminando favorito: $e');
                           }
                         },
                         child: Container(

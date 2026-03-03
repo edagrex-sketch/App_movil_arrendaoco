@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/widgets/map_preview_osm.dart';
-import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
-import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/services/api_service.dart';
 
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:arrendaoco/utils/casting.dart';
 
 class DetalleInmuebleScreen extends StatefulWidget {
   final Map inmueble;
@@ -32,14 +31,13 @@ class DetalleInmuebleScreen extends StatefulWidget {
 }
 
 class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
+  final ApiService _api = ApiService();
   late PageController _pageController;
   int _currentImageIndex = 0;
   List<Map<String, dynamic>> _resenas = [];
   double _promedioRating = 0.0;
   int _totalResenas = 0;
   bool _esFavorito = false;
-
-  late StreamSubscription<List<Map<String, dynamic>>> _resenasSubscription;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -53,13 +51,11 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     _pageController = PageController();
     _highlightedResenaId = widget.highlightResenaId;
 
-    _iniciarEscuchaResenas();
+    _cargarResenas();
     _verificarFavorito();
 
-    // Lógica para scroll automático diferido
     if (widget.scrollToReviews || widget.highlightResenaId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Delay para permitir que Supabase cargue y la UI renderize los items
         Future.delayed(const Duration(milliseconds: 1000), () {
           _scrollToObjective();
         });
@@ -67,10 +63,29 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     }
   }
 
+  Future<void> _verificarFavorito() async {
+    if (SesionActual.usuarioId == null) return;
+    try {
+      final response = await _api.get('/favoritos');
+      if (response.statusCode == 200) {
+        final List<dynamic> favs = response.data['data'] ?? [];
+        final isCurrentlyFav = favs.any(
+          (f) => f['id'] == widget.inmueble['id'],
+        );
+        if (mounted) {
+          setState(() {
+            _esFavorito = isCurrentlyFav;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error verificando favorito: $e');
+    }
+  }
+
   void _scrollToObjective() {
     if (!mounted) return;
 
-    // Prioridad: Ir a reseña específica
     if (_highlightedResenaId != null &&
         _itemKeys.containsKey(_highlightedResenaId)) {
       final key = _itemKeys[_highlightedResenaId];
@@ -79,10 +94,9 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
           key!.currentContext!,
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOutCubic,
-          alignment: 0.5, // Centrar en pantalla
+          alignment: 0.5,
         );
 
-        // Quitar highlight después de unos segundos
         Future.delayed(const Duration(seconds: 4), () {
           if (mounted) setState(() => _highlightedResenaId = null);
         });
@@ -90,7 +104,6 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
       }
     }
 
-    // Fallback: Ir a la sección general de reseñas
     if (widget.scrollToReviews && _scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
@@ -100,68 +113,45 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     }
   }
 
-  Future<void> _verificarFavorito() async {
-    final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-    if (uid == 0) return;
-    final iid = widget.inmueble['id'] as int;
-    final esFav = await BaseDatos.esFavorito(uid, iid);
-    if (mounted) {
-      setState(() {
-        _esFavorito = esFav;
-      });
-    }
-  }
+  Future<void> _cargarResenas() async {
+    // Los datos del inmueble que recibimos de Explorar ya traen las reseñas.
+    // Pero si queremos actualizarlas o si venimos de otra parte, podemos recargar el detalle.
+    final id = widget.inmueble['id'];
+    try {
+      final response = await _api.get('/inmuebles/public-detail/$id');
+      if (response.statusCode == 200) {
+        final data = response.data['data'];
+        if (mounted) {
+          setState(() {
+            _resenas = List<Map<String, dynamic>>.from(data['resenas'] ?? []);
+            _promedioRating =
+                (data['promedio_calificacion'] as num?)?.toDouble() ?? 0.0;
+            _totalResenas = data['total_resenas'] ?? 0;
 
-  void _iniciarEscuchaResenas() {
-    final inmuebleId = widget.inmueble['id'];
-    _resenasSubscription = Supabase.instance.client
-        .from('resenas')
-        .stream(primaryKey: ['id'])
-        .eq('inmueble_id', inmuebleId)
-        .order('fecha', ascending: false)
-        .listen((data) {
-          if (mounted) {
-            setState(() {
-              _resenas = data;
-              // Asignar keys estables a las reseñas
-              for (var r in _resenas) {
-                final id = r['id'] as int;
-                if (!_itemKeys.containsKey(id)) {
-                  _itemKeys[id] = GlobalKey();
-                }
+            for (var r in _resenas) {
+              final rid = r['id'] as int;
+              if (!_itemKeys.containsKey(rid)) {
+                _itemKeys[rid] = GlobalKey();
               }
-              _calcularResumen();
-            });
-
-            // Si estábamos esperando datos para hacer scroll, intentarlo de nuevo
-            if (_highlightedResenaId != null) {
-              Future.delayed(
-                const Duration(milliseconds: 500),
-                _scrollToObjective,
-              );
             }
-          }
-        });
-  }
+          });
 
-  void _calcularResumen() {
-    if (_resenas.isEmpty) {
-      _promedioRating = 0.0;
-      _totalResenas = 0;
-      return;
+          if (_highlightedResenaId != null) {
+            Future.delayed(
+              const Duration(milliseconds: 500),
+              _scrollToObjective,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cargando reseñas: $e');
     }
-    double suma = 0;
-    for (var r in _resenas) {
-      suma += (r['rating'] as num).toDouble();
-    }
-    _promedioRating = suma / _resenas.length;
-    _totalResenas = _resenas.length;
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _resenasSubscription.cancel();
     super.dispose();
   }
 
@@ -234,18 +224,24 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     final inmueble = widget.inmueble;
     final titulo = inmueble['titulo'] ?? '';
     final descripcion = inmueble['descripcion'] ?? '';
-    final precio = inmueble['precio'] ?? 0;
-    final categoria = inmueble['categoria'] ?? '';
-    final disponible =
-        inmueble['disponible'] == true || (inmueble['disponible'] as int?) == 1;
-    final latitud = (inmueble['latitud'] as num?)?.toDouble() ?? 0.0;
-    final longitud = (inmueble['longitud'] as num?)?.toDouble() ?? 0.0;
-    final rutasRaw = inmueble['rutas_imagen'] as String? ?? '';
-    final rutas = rutasRaw.isEmpty ? [] : rutasRaw.split(',');
-    final imagenes = rutas;
-    final camas = inmueble['camas'] ?? 2;
-    final banos = inmueble['banos'] ?? 1;
-    final metros = inmueble['tamano'] ?? '80';
+    final precio = Parser.toDouble(inmueble['renta_mensual']);
+    final categoria = inmueble['tipo'] ?? '';
+    final disponible = (inmueble['estatus'] == 'disponible');
+    final latitud = Parser.toDouble(inmueble['latitud']);
+    final longitud = Parser.toDouble(inmueble['longitud']);
+
+    // En Laravel API 'imagenes' es una lista de objetos {id, url}
+    final List<dynamic> imgList = inmueble['imagenes'] ?? [];
+    final imagenes = imgList.map((img) => img['url'].toString()).toList();
+
+    // Si no hay imágenes en la lista pero hay portada, añadirla
+    if (imagenes.isEmpty && inmueble['imagen_portada'] != null) {
+      imagenes.add(inmueble['imagen_portada'].toString());
+    }
+
+    final camas = Parser.paramInt(inmueble['habitaciones']);
+    final banos = Parser.paramInt(inmueble['banos']);
+    final metros = Parser.paramInt(inmueble['metros']);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -283,14 +279,15 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 ),
               ),
               onPressed: () async {
-                final uid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-                final iid = inmueble['id'] as int;
-                if (_esFavorito) {
-                  await BaseDatos.eliminarFavorito(uid, iid);
-                } else {
-                  await BaseDatos.agregarFavorito(uid, iid);
+                final id = inmueble['id'];
+                try {
+                  final response = await _api.post('/favoritos/$id/toggle');
+                  if (response.statusCode == 200) {
+                    setState(() => _esFavorito = !_esFavorito);
+                  }
+                } catch (e) {
+                  debugPrint('Error toggling favorite: $e');
                 }
-                setState(() => _esFavorito = !_esFavorito);
               },
             ),
           const SizedBox(width: 8),
@@ -661,7 +658,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                   _buildEstrellas(_promedioRating, size: 20),
                   const SizedBox(height: 4),
                   Text(
-                    'Based on $_totalResenas reviews',
+                    'Basado en $_totalResenas reseñas',
                     style: TextStyle(color: Colors.grey[500], fontSize: 13),
                   ),
                 ],
@@ -690,37 +687,22 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
 
   Widget _buildItemResena(Map r) {
     final int resenaId = r['id'] as int;
-    final nombre = (r['usuario_nombre'] ?? 'Anónimo').toString();
-    final rating = (r['rating'] ?? 0) as int;
+    final nombre = (r['usuario'] ?? 'Anónimo').toString();
+    final rating = (r['puntuacion'] ?? 0) as int;
     final comentario = (r['comentario'] ?? '').toString();
-    final fechaRaw = (r['fecha'] ?? '').toString();
-    String fechaFormateada = fechaRaw;
-    if (fechaRaw.length >= 16) {
-      fechaFormateada = fechaRaw.substring(0, 16).replaceAll('T', ' ');
-    }
-
-    final respuesta = (r['respuesta'] as String? ?? '');
-    final currentNombre = SesionActual.nombre.trim();
-    final resenaNombre = nombre.trim();
+    final fechaFormateada = (r['fecha'] ?? '').toString();
 
     final currentUid = int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-    final esMia =
-        ((r['usuario_id'] != null && r['usuario_id'] == currentUid) ||
-        (currentNombre.isNotEmpty && currentNombre == resenaNombre));
-    final propietarioId = (widget.inmueble['propietario_id'] as int?) ?? 0;
-    final soyPropietario = (currentUid != 0 && currentUid == propietarioId);
+    final esMia = (r['usuario_id'] != null && r['usuario_id'] == currentUid);
 
     final bool highlighted = _highlightedResenaId == resenaId;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
-      key:
-          _itemKeys[resenaId], // Asignamos la GlobalKey que creamos en el listener
+      key: _itemKeys[resenaId],
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: highlighted
-            ? Colors.amber[50]
-            : Colors.white, // Color de highlight suave
+        color: highlighted ? Colors.amber[50] : Colors.white,
         border: highlighted ? Border.all(color: Colors.amber, width: 2) : null,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
@@ -782,61 +764,6 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
             fechaFormateada,
             style: TextStyle(color: Colors.grey[400], fontSize: 12),
           ),
-
-          if (respuesta.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F4FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE0E7FF)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.business_center_rounded,
-                        size: 16,
-                        color: MiTema.azul,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Respuesta del Propietario',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: MiTema.azul,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    respuesta,
-                    style: TextStyle(fontSize: 13, color: Colors.blueGrey[800]),
-                  ),
-                ],
-              ),
-            ),
-
-          // SECCION CHAT (Mensajes ilimitados)
-          _buildChatSection(resenaId),
-
-          if (esMia || soyPropietario)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: StunningButton(
-                onPressed: () => _mostrarDialogoChat(resenaId),
-                text: 'Ver conversación / Responder',
-                backgroundColor: MiTema.celeste,
-                textColor: Colors.white,
-                isSmall: true,
-                icon: Icons.chat_bubble_outline_rounded,
-              ),
-            ),
         ],
       ),
     );
@@ -855,189 +782,19 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     );
   }
 
-  // ================== CHAT IMPLEMENTATION ==================
-
-  Widget _buildChatSection(int resenaId) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: BaseDatos.obtenerMensajesResena(resenaId),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          // Si falla (ej. tabla no existe), ocultamos silenciosamente o mostramos error sutil
-          return const SizedBox.shrink();
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final mensajes = snapshot.data!;
-        return Column(
-          children: mensajes.map((msg) {
-            final esMio =
-                msg['usuario_id'] ==
-                int.tryParse(SesionActual.usuarioId ?? '0');
-            return Container(
-              margin: const EdgeInsets.only(top: 8, left: 16),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: esMio
-                    ? MiTema.celeste.withOpacity(0.1)
-                    : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: esMio
-                      ? MiTema.celeste.withOpacity(0.3)
-                      : Colors.grey[300]!,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        msg['usuario_nombre'] ?? 'Usuario',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: esMio ? MiTema.celeste : Colors.grey[800],
-                        ),
-                      ),
-                      Text(
-                        _formatearFechaCorta(msg['fecha']),
-                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    msg['mensaje'] ?? '',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[800]),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  String _formatearFechaCorta(dynamic fecha) {
-    if (fecha == null) return '';
-    try {
-      final dt = DateTime.parse(fecha.toString());
-      return '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return '';
-    }
-  }
-
-  void _mostrarDialogoChat(int resenaId) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Responder'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Escribe un mensaje...',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.trim().isEmpty) return;
-              Navigator.pop(context);
-
-              try {
-                await BaseDatos.enviarMensajeResena(
-                  resenaId: resenaId,
-                  usuarioId: int.parse(SesionActual.usuarioId!),
-                  usuarioNombre: SesionActual.nombre,
-                  mensaje: controller.text.trim(),
-                );
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Mensaje enviado')),
-                  );
-                }
-
-                // NOTIFICAR
-                try {
-                  final currentUid =
-                      int.tryParse(SesionActual.usuarioId ?? '0') ?? 0;
-                  final propietarioId =
-                      (widget.inmueble['propietario_id'] as int?) ?? 0;
-
-                  final resenaObj = _resenas.firstWhere(
-                    (r) => r['id'] == resenaId,
-                    orElse: () => {},
-                  );
-                  final autorId = resenaObj.isNotEmpty
-                      ? (resenaObj['usuario_id'] as int?)
-                      : 0;
-
-                  int? targetId;
-                  if (currentUid == propietarioId)
-                    targetId = autorId;
-                  else if (currentUid == autorId)
-                    targetId = propietarioId;
-
-                  if (targetId != null &&
-                      targetId != 0 &&
-                      targetId != currentUid) {
-                    String tituloNoti = 'Nueva respuesta';
-                    if (currentUid == propietarioId) {
-                      tituloNoti = 'Respuesta del Propietario';
-                    } else {
-                      tituloNoti =
-                          'Mensaje de ${SesionActual.nombre.isEmpty ? "Usuario" : SesionActual.nombre}';
-                    }
-
-                    await NotificacionesService.notificarRespuestaResena(
-                      usuarioDestinoId: targetId,
-                      nombreInmueble: (widget.inmueble['titulo'] ?? 'Propiedad')
-                          .toString(),
-                      resenaId: resenaId,
-                      mensajeChat: controller.text.trim(),
-                      tituloPersonalizado: tituloNoti,
-                    );
-                  }
-                } catch (_) {}
-              } catch (e) {
-                if (mounted)
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Error al enviar')),
-                  );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: MiTema.azul,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Mantenemos _eliminarResena abajo...
   Future<void> _eliminarResena(int id) async {
-    await BaseDatos.eliminarResena(id);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Reseña eliminada')));
+    try {
+      final response = await _api.delete('/resenas/$id');
+      if (response.statusCode == 200) {
+        _cargarResenas(); // Recargar
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Reseña eliminada')));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error eliminando reseña: $e');
     }
   }
 
@@ -1111,9 +868,10 @@ class _FormularioResenaSheet extends StatefulWidget {
 }
 
 class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
-  int _rating = 5;
-  final _comentarioCtrl = TextEditingController();
-  bool _enviando = false;
+  final ApiService _api = ApiService();
+  int _puntuacion = 5;
+  final TextEditingController _comentarioController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1145,9 +903,9 @@ class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
             children: List.generate(
               5,
               (index) => IconButton(
-                onPressed: () => setState(() => _rating = index + 1),
+                onPressed: () => setState(() => _puntuacion = index + 1),
                 icon: Icon(
-                  index < _rating
+                  index < _puntuacion
                       ? Icons.star_rounded
                       : Icons.star_outline_rounded,
                   color: Colors.amber,
@@ -1158,7 +916,7 @@ class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
           ),
           const SizedBox(height: 20),
           TextField(
-            controller: _comentarioCtrl,
+            controller: _comentarioController,
             decoration: InputDecoration(
               hintText: 'Comparte tu experiencia...',
               border: OutlineInputBorder(
@@ -1173,8 +931,8 @@ class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
           SizedBox(
             width: double.infinity,
             child: StunningButton(
-              onPressed: _enviando ? null : _guardarResena,
-              text: _enviando ? 'Enviando...' : 'Publicar Reseña',
+              onPressed: _isLoading ? null : _guardarResena,
+              text: _isLoading ? 'Enviando...' : 'Publicar Reseña',
             ),
           ),
           const SizedBox(height: 24),
@@ -1184,70 +942,34 @@ class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
   }
 
   Future<void> _guardarResena() async {
-    if (_comentarioCtrl.text.trim().isEmpty) return;
-    setState(() => _enviando = true);
+    if (_comentarioController.text.trim().isEmpty) return;
+    setState(() => _isLoading = true);
     try {
-      final resena = {
-        'inmueble_id': widget.inmuebleId,
-        'usuario_id': widget.usuarioId,
-        'usuario_nombre': SesionActual.nombre,
-        'rating': _rating,
-        'comentario': _comentarioCtrl.text.trim(),
-        'fecha': DateTime.now().toIso8601String(),
-      };
-
-      // INSERTAR Y OBTENER ID
-      final nuevoId = await BaseDatos.insertarResena(resena);
-
-      widget.onResenaGuardada();
-      if (mounted) Navigator.pop(context);
-
-      // Enviar Notificación al Propietario (Arrendador)
-      // Aqui necesitamos el ID del propietario del inmueble.
-      // Como no lo tenemos directo en props de este widget, lo ideal es pasarlo.
-      // Pero 'DetalleInmuebleScreen' lo tiene.
-      // Solución rápida: Asumimos que la BD trigger o el padre maneja esto.
-
-      // MEJOR: Enviamos la notificación aqui mismo usando un servicio helper que busque el propietario si hace falta,
-      // O simplemente asumimos que en el flujo real deberíamos tener el dato.
-      // Voy a llamar al servicio asumiendo que el padre lo gestiona o lo dejamos aqui:
-
-      // Para efectos de demo, llamaré NotificacionesService,
-      // PERO necesito inmuebleId y el ID del dueño.
-      // Como este widget sheet es hijo, no tiene acceso directo fácil al mapa 'inmueble' completo si no se lo pasamos.
-      // Pasaré la responsabilidad al padre (DetalleScreen) de notificar si es necesario,
-      // PERO ya habíamos puesto lógica en DetalleInmueble antes. La recupero.
-
-      // Recuperando lógica de notificación desde el contexto padre o global:
-      // (Verificar implementación en DetalleInmuebleScreen donde se llama a este sheet)
-
-      // ... En DetalleInmuebleScreen._mostrarFormularioResena ...
-      // Ah, ahí no pase el callback de notificación.
-      // Lo haré directo aqui buscando el propietario:
-
-      final inmuebleData = await BaseDatos.obtenerInmueblePorId(
-        widget.inmuebleId,
+      final response = await _api.post(
+        '/resenas',
+        data: {
+          'inmueble_id': widget.inmuebleId,
+          'puntuacion': _puntuacion,
+          'comentario': _comentarioController.text,
+        },
       );
-      if (inmuebleData != null) {
-        final propietarioId = inmuebleData['propietario_id'] as int;
-        final nombreInmueble = inmuebleData['titulo']; // o direccion
-        final autoresNombre = SesionActual.nombre;
 
-        await NotificacionesService.notificarNuevaResena(
-          propietarioId: propietarioId,
-          inmuebleId: widget.inmuebleId,
-          nombreInmueble: nombreInmueble,
-          autorNombre: autoresNombre,
-          comentario: _comentarioCtrl.text.trim(),
-          resenaId: nuevoId, // ¡AQUI ESTA LA CLAVE para el deep linking!
-        );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        widget.onResenaGuardada();
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Reseña guardada con éxito!')),
+          );
+        }
       }
     } catch (e) {
+      debugPrint('Error guardando reseña: $e');
       if (mounted) {
-        setState(() => _enviando = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al guardar reseña')),
-        );
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
