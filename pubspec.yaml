@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.6.0
   url_launcher: ^6.3.2
   cupertino_icons: ^1.0.8
   path: ^1.9.0

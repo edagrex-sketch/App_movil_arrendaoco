@@ -5,7 +5,6 @@ import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CalendarioArrendadorScreen extends StatefulWidget {
   const CalendarioArrendadorScreen({super.key});
@@ -17,26 +16,49 @@ class CalendarioArrendadorScreen extends StatefulWidget {
 
 class _CalendarioArrendadorScreenState
     extends State<CalendarioArrendadorScreen> {
-  late Stream<List<Map<String, dynamic>>> _eventosStream;
+  List<Map<String, dynamic>> _eventos = [];
   List<Map<String, dynamic>> _pagos = [];
+  bool _isLoading = true;
   DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
+    _refreshData();
+  }
+
+  Future<void> _refreshData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     final usuarioId = SesionActual.usuarioId;
     final uid = int.tryParse(usuarioId ?? '0') ?? 0;
-    _eventosStream = Supabase.instance.client
-        .from('calendario')
-        .stream(primaryKey: ['id'])
-        .eq('usuario_id', uid)
-        .order('fecha', ascending: true);
 
-    _cargarPagos(uid);
+    try {
+      final eventos = await BaseDatos.obtenerEventosPorUsuario(uid);
+      final pagos = await BaseDatos.obtenerPagosPendientes(uid, 'Arrendador');
+
+      if (mounted) {
+        setState(() {
+          _eventos = eventos;
+          _pagos = pagos;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Fusionar eventos y pagos
+    final todosEventos = [..._eventos, ..._pagos];
+    todosEventos.sort((a, b) {
+      final da = DateTime.tryParse(a['fecha'] ?? '') ?? DateTime.now();
+      final db = DateTime.tryParse(b['fecha'] ?? '') ?? DateTime.now();
+      return da.compareTo(db);
+    });
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -54,176 +76,156 @@ class _CalendarioArrendadorScreenState
         centerTitle: true,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Calendario simple
-            Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              // Calendario simple
+              Container(
+                margin: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_left_rounded,
+                            color: MiTema.azul,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _selectedDate = DateTime(
+                                _selectedDate.year,
+                                _selectedDate.month - 1,
+                              );
+                            });
+                          },
+                        ),
+                        Text(
+                          '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: MiTema.azul,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_right_rounded,
+                            color: MiTema.azul,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _selectedDate = DateTime(
+                                _selectedDate.year,
+                                _selectedDate.month + 1,
+                              );
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _buildCalendarGrid(),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.chevron_left_rounded,
-                          color: MiTema.azul,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              _selectedDate.year,
-                              _selectedDate.month - 1,
-                            );
-                          });
-                        },
-                      ),
-                      Text(
-                        '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: MiTema.azul,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.chevron_right_rounded,
-                          color: MiTema.azul,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              _selectedDate.year,
-                              _selectedDate.month + 1,
-                            );
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _buildCalendarGrid(),
-                ],
-              ),
-            ),
 
-            // Lista de eventos
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.event_available_rounded,
-                    color: MiTema.vino,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Detalles y Acciones',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+              // Lista de eventos
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.event_available_rounded,
                       color: MiTema.vino,
+                      size: 28,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _eventosStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: MiTema.celeste),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-
-                final eventosBD = snapshot.data ?? [];
-                // Fusionar con pagos
-                final eventos = [...eventosBD, ..._pagos];
-                // Ordenar por fecha
-                eventos.sort((a, b) {
-                  final da = DateTime.tryParse(a['fecha']) ?? DateTime.now();
-                  final db = DateTime.tryParse(b['fecha']) ?? DateTime.now();
-                  return da.compareTo(db);
-                });
-
-                if (eventos.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 40),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 10,
-                                  offset: Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.event_busy_rounded,
-                              size: 40,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No tienes eventos programados',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 12),
+                    Text(
+                      'Detalles y Acciones',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.vino,
                       ),
                     ),
-                  );
-                }
-
-                return ListView.separated(
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_isLoading)
+                Center(child: CircularProgressIndicator(color: MiTema.celeste))
+              else if (todosEventos.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 40),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 10,
+                                offset: Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.event_busy_rounded,
+                            size: 40,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No tienes eventos programados',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ListView.separated(
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: eventos.length,
+                  itemCount: todosEventos.length,
                   separatorBuilder: (c, i) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final evento = eventos[index];
+                    final evento = todosEventos[index];
                     return _buildEventoCard(evento);
                   },
-                );
-              },
-            ),
-            const SizedBox(height: 100),
-          ],
+                ),
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -595,15 +597,6 @@ class _CalendarioArrendadorScreenState
         );
       },
     );
-  }
-
-  Future<void> _cargarPagos(int uid) async {
-    final pagos = await BaseDatos.obtenerPagosPendientes(uid, 'Arrendador');
-    if (mounted) {
-      setState(() {
-        _pagos = pagos;
-      });
-    }
   }
 
   String _getMonthName(int month) {

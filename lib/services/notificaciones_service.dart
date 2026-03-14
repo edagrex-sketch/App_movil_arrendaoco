@@ -1,5 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:arrendaoco/model/bd.dart';
 
 class NotificacionesService {
@@ -187,58 +187,10 @@ class NotificacionesService {
     );
   }
 
-  static RealtimeChannel? _activeChannel;
-
   static void escucharNotificaciones(int usuarioId) async {
-    // 1. Limpiar suscripción anterior si existe para evitar duplicados
-    if (_activeChannel != null) {
-      await Supabase.instance.client.removeChannel(_activeChannel!);
-      _activeChannel = null;
-    }
-
-    print('🔔 Iniciando suscripción limpia para usuario: $usuarioId');
-
-    // 2. Crear nueva suscripción
-    _activeChannel = Supabase.instance.client.channel(
-      'public:notificaciones:$usuarioId',
+    // TODO: Implementar con Laravel Echo o FCM
+    print(
+      'ℹ️ Escuchar notificaciones realtime está deshabilitado temporalmente (Sin Supabase)',
     );
-
-    _activeChannel!
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notificaciones',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column:
-                'usuario_id', // Escuchamos donde el usuario es el DESTINATARIO
-            value: usuarioId,
-          ),
-          callback: (payload) async {
-            print('🔔 ¡Notificación REALTIME recibida!');
-            final newRecord = payload.newRecord;
-            if (newRecord.isNotEmpty) {
-              // Extraer datos
-              final titulo = newRecord['titulo'] ?? 'Nueva Notificación';
-              final mensaje = newRecord['mensaje'] ?? 'Tienes un nuevo mensaje';
-
-              // Mostrar notificación local
-              await mostrarNotificacion(
-                titulo: titulo,
-                cuerpo: mensaje,
-                // Podemos pasar data extra en el payload si queremos deep link luego
-              );
-            }
-          },
-        )
-        .subscribe((status, error) {
-          if (status == RealtimeSubscribeStatus.subscribed) {
-            print('✅ Conexión establecida a notificaciones');
-          } else if (status == RealtimeSubscribeStatus.closed) {
-            print('❌ Conexión cerrada');
-          } else if (error != null) {
-            print('⚠️ Error en suscripción: $error');
-          }
-        });
   }
 }

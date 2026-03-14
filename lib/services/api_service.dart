@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // 10.0.2.2 apunta al localhost de tu PC desde el emulador Android
-  static const String baseUrl = 'http://10.0.2.2:8000/api';
+  static const String baseUrl = 'http://192.168.3.4:8000/api';
 
   final Dio _dio = Dio(
     BaseOptions(

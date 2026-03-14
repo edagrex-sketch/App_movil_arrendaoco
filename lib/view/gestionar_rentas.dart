@@ -8,7 +8,7 @@ import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'dart:async';
 import 'package:arrendaoco/services/notificaciones_service.dart';
@@ -21,8 +21,9 @@ class GestionarRentasScreen extends StatefulWidget {
 }
 
 class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
-  Stream<List<Map<String, dynamic>>>? _rentasStream;
-  Stream<List<Map<String, dynamic>>>? _eventosStream;
+  List<Map<String, dynamic>> _rentas = [];
+  List<Map<String, dynamic>> _eventos = [];
+  bool _isLoading = true;
 
   DateTime _selectedDate = DateTime.now();
 
@@ -32,43 +33,30 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
     _refreshData();
   }
 
-  void _refreshData() {
-    _initCalendarStream();
-
+  Future<void> _refreshData() async {
+    setState(() => _isLoading = true);
     final usuarioId = SesionActual.usuarioId;
     final uid = int.tryParse(usuarioId ?? '0') ?? 0;
 
-    // Stream de Rentas (Arrendador)
-    setState(() {
-      _rentasStream = Supabase.instance.client
-          .from('rentas')
-          .stream(primaryKey: ['id'])
-          .eq('arrendador_id', uid)
-          .order('fecha_inicio', ascending: false)
-          .asyncMap((list) async {
-            // Enriquecer datos con relaciones (Inmueble, Inquilino)
-            final enrichedList = <Map<String, dynamic>>[];
-            for (var r in list) {
-              final rentaId = r['id'];
-              // Consultar renta completa
-              final fullData = await BaseDatos.obtenerRentaPorId(rentaId);
-              if (fullData != null) {
-                enrichedList.add(fullData);
-              }
-            }
-            return enrichedList;
-          });
-    });
+    try {
+      final rentas = await BaseDatos.obtenerRentasPorArrendador(uid);
+      final eventos = await BaseDatos.obtenerEventosPorUsuario(uid);
+
+      if (mounted) {
+        setState(() {
+          _rentas = rentas;
+          _eventos = eventos;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refrescando datos: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _initCalendarStream() {
-    final usuarioId = SesionActual.usuarioId;
-    final uid = int.tryParse(usuarioId ?? '0') ?? 0;
-    _eventosStream = Supabase.instance.client
-        .from('calendario')
-        .stream(primaryKey: ['id'])
-        .eq('usuario_id', uid)
-        .order('fecha', ascending: true);
+    // Ya no es necesario con el nuevo flujo de datos
   }
 
   double _calcularIngresosTotales(List<Map<String, dynamic>> rentas) {
@@ -150,246 +138,220 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
           ),
         ],
       ),
-      body: _rentasStream == null
+      body: _isLoading
           ? Center(child: CircularProgressIndicator(color: MiTema.celeste))
-          : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _rentasStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: MiTema.celeste),
-                  );
-                }
-
-                final rentas = snapshot.data ?? [];
-                final ingresosTotales = _calcularIngresosTotales(rentas);
-                final rentasActivas = rentas
-                    .where((r) => r['estado'] == 'activa')
-                    .length;
-
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // KPI CARDS
-                      Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildStatCard(
-                                'Ingresos Mensuales',
-                                '\$${ingresosTotales.toStringAsFixed(0)}',
-                                Icons.attach_money_rounded,
-                                Colors.green,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildStatCard(
-                                'Rentas Activas',
-                                '$rentasActivas',
-                                Icons.home_work_rounded,
-                                MiTema.celeste,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Lista de Rentas (Horizontal Scroll)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Tus Propiedades',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: MiTema.azul,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _mostrarFormularioNuevaRenta,
-                              child: Text(
-                                '+ Nueva Renta',
-                                style: TextStyle(
-                                  color: MiTema.vino,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      if (rentas.isEmpty)
-                        _buildEmptyState()
-                      else
-                        SizedBox(
-                          height: 360,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            scrollDirection: Axis.horizontal,
-                            itemCount: rentas.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 16),
-                                child: SizedBox(
-                                  width: 280,
-                                  child: _buildRentaCard(rentas[index]),
-                                ),
-                              );
-                            },
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // KPI CARDS
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            'Ingresos Mensuales',
+                            '\$${_calcularIngresosTotales(_rentas).toStringAsFixed(0)}',
+                            Icons.attach_money_rounded,
+                            Colors.green,
                           ),
                         ),
-
-                      const SizedBox(height: 24),
-
-                      // CALENDARIO
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.calendar_month_rounded,
-                              color: MiTema.azul,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Calendario de Cobros',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: MiTema.azul,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildStatCard(
+                            'Rentas Activas',
+                            '${_rentas.where((r) => r['estado'] == 'activa').length}',
+                            Icons.home_work_rounded,
+                            MiTema.celeste,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
 
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 15,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.chevron_left_rounded,
-                                      color: MiTema.azul,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _selectedDate = DateTime(
-                                          _selectedDate.year,
-                                          _selectedDate.month - 1,
-                                        );
-                                      });
-                                    },
-                                  ),
-                                  Text(
-                                    '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: MiTema.azul,
-                                      letterSpacing: 1.2,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: MiTema.azul,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _selectedDate = DateTime(
-                                          _selectedDate.year,
-                                          _selectedDate.month + 1,
-                                        );
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _buildCalendarGrid(),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Lista de Eventos (Timeline)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Text(
-                          'Acciones Pendientes',
+                  // Lista de Rentas (Horizontal Scroll)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Tus Propiedades',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: MiTema.azul,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: _mostrarFormularioNuevaRenta,
+                          child: Text(
+                            '+ Nueva Renta',
+                            style: TextStyle(
+                              color: MiTema.vino,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                      StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: _eventosStream,
-                        builder: (context, snapshot) {
-                          final eventos = snapshot.data ?? [];
-                          if (eventos.isEmpty) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 20,
-                                horizontal: 20,
-                              ),
-                              child: Text(
-                                'No hay acciones pendientes.',
-                                style: TextStyle(color: Colors.grey[500]),
-                              ),
-                            );
-                          }
-
-                          return ListView.separated(
-                            physics: const NeverScrollableScrollPhysics(),
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: eventos.length,
-                            separatorBuilder: (c, i) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              return _buildEventoCard(eventos[index]);
-                            },
+                  if (_rentas.isEmpty)
+                    _buildEmptyState()
+                  else
+                    SizedBox(
+                      height: 360,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _rentas.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: SizedBox(
+                              width: 280,
+                              child: _buildRentaCard(_rentas[index]),
+                            ),
                           );
                         },
                       ),
-                      const SizedBox(height: 100), // Space for FAB
-                    ],
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // CALENDARIO
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_month_rounded,
+                          color: MiTema.azul,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Calendario de Cobros',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: MiTema.azul,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                  const SizedBox(height: 16),
+
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  Icons.chevron_left_rounded,
+                                  color: MiTema.azul,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedDate = DateTime(
+                                      _selectedDate.year,
+                                      _selectedDate.month - 1,
+                                    );
+                                  });
+                                },
+                              ),
+                              Text(
+                                '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: MiTema.azul,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: MiTema.azul,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedDate = DateTime(
+                                      _selectedDate.year,
+                                      _selectedDate.month + 1,
+                                    );
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        _buildCalendarGrid(),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Lista de Eventos (Timeline)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Acciones Pendientes',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (_eventos.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 20,
+                        horizontal: 20,
+                      ),
+                      child: Text(
+                        'No hay acciones pendientes.',
+                        style: TextStyle(color: Colors.grey[500]),
+                      ),
+                    )
+                  else
+                    ListView.separated(
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: _eventos.length,
+                      separatorBuilder: (c, i) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        return _buildEventoCard(_eventos[index]);
+                      },
+                    ),
+                  const SizedBox(height: 100), // Space for FAB
+                ],
+              ),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _mostrarFormularioNuevaRenta,

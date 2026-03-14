@@ -6,18 +6,8 @@ import 'package:arrendaoco/services/notificaciones_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 // import 'firebase_options.dart'; // Descomentar una vez generado con `flutterfire configure`
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Inicializar Supabase
-  await Supabase.initialize(
-    url: 'https://ewkythohvhdmksswsdxj.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3a3l0aG9odmhkbWtzc3dzZHhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwNDQyODUsImV4cCI6MjA4MDYyMDI4NX0.gSegtK1EsXoEL88KHCLsK83EarYnVpYt5Y6oKbMm8wU',
-  );
-  debugPrint('✅ Supabase inicializado');
 
   // Inicializar Firebase
   try {
