@@ -43,6 +43,8 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
   String? _categoriaSeleccionada;
   int _camas = 1;
   int _banos = 1;
+  int _mediosBanos = 0; // campo medios_banos de la API
+  bool _banoCompartido = false;
   String _tamano = 'Pequeño';
 
   final List<String> _categorias = ['Casa', 'Departamento', 'Cuarto'];
@@ -79,26 +81,53 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
 
   void _cargarDatosInmueble() {
     final data = widget.inmuebleData!;
-    _tituloController.text = data['titulo'] ?? '';
-    _descripcionController.text = data['descripcion'] ?? '';
-    _precioController.text = (data['precio'] ?? 0).toString();
-    final disp = data['disponible'];
-    if (disp is bool) {
-      _disponible = disp;
-    } else if (disp is int) {
-      _disponible = disp == 1;
-    } else {
-      _disponible = true;
-    }
-    _categoriaSeleccionada = data['categoria'];
-    _camas = data['camas'] ?? 1;
-    _banos = data['banos'] ?? 1;
-    _tamano = data['tamano'] ?? 'Pequeño';
 
-    if (data['latitud'] != null && data['longitud'] != null) {
+    _tituloController.text = data['titulo']?.toString() ?? '';
+    _descripcionController.text = data['descripcion']?.toString() ?? '';
+
+    // renta_mensual puede venir como String ("5500.00") o num
+    final rentaRaw = data['renta_mensual'];
+    final renta = double.tryParse(rentaRaw?.toString() ?? '') ?? 0.0;
+    _precioController.text = renta == renta.truncateToDouble()
+        ? renta.toStringAsFixed(0)
+        : renta.toStringAsFixed(2);
+
+    // estatus: 'disponible' | 'rentado' | 'inactivo'
+    _disponible = (data['estatus']?.toString() ?? '') == 'disponible';
+
+    // tipo puede no coincidir exactamente con _categorias
+    final tipoApi = data['tipo']?.toString() ?? '';
+    _categoriaSeleccionada = _categorias.contains(tipoApi) ? tipoApi : _categorias.first;
+
+    // habitaciones y banos vienen como num o String
+    final camasRaw = int.tryParse(data['habitaciones']?.toString() ?? '') ?? 1;
+    _camas = camasRaw.clamp(1, 5); // opciones: 1-5
+
+    final banosRaw = int.tryParse(data['banos']?.toString() ?? '') ?? 1;
+    _banos = banosRaw.clamp(1, 4); // opciones: 1-4
+
+    final mediosBanosRaw = int.tryParse(data['medios_banos']?.toString() ?? '') ?? 0;
+    _mediosBanos = mediosBanosRaw.clamp(0, 2); // opciones: 0-2
+
+    _banoCompartido = data['bano_compartido'] == true || data['bano_compartido'] == 1 || data['bano_compartido'] == "1";
+
+    // metros puede venir como String "144.00" — convertir antes de comparar
+    final metrosRaw = double.tryParse(data['metros']?.toString() ?? '') ?? 50.0;
+    if (metrosRaw <= 60) {
+      _tamano = 'Pequeño';
+    } else if (metrosRaw <= 120) {
+      _tamano = 'Mediano';
+    } else {
+      _tamano = 'Grande';
+    }
+
+    // Latitud / Longitud
+    final lat = double.tryParse(data['latitud']?.toString() ?? '');
+    final lng = double.tryParse(data['longitud']?.toString() ?? '');
+    if (lat != null && lng != null) {
       _ubicacionActual = Position(
-        latitude: data['latitud'],
-        longitude: data['longitud'],
+        latitude: lat,
+        longitude: lng,
         timestamp: DateTime.now(),
         accuracy: 0,
         altitude: 0,
@@ -108,8 +137,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
         altitudeAccuracy: 0,
         headingAccuracy: 0,
       );
-      _mensajeUbicacion =
-          'Ubicación cargada: Lat ${data['latitud'].toStringAsFixed(5)}, Lng ${data['longitud'].toStringAsFixed(5)}';
+      _mensajeUbicacion = 'Ubicación cargada: Lat ${lat.toStringAsFixed(5)}, Lng ${lng.toStringAsFixed(5)}';
     }
   }
 
@@ -214,6 +242,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
     LottieLoading.showLoadingDialog(context, message: '$accion inmueble...');
 
     try {
+      // metros: Pequeño=50, Mediano=100, Grande=200
+      final metrosValor = _tamano == 'Pequeño' ? 50 : (_tamano == 'Mediano' ? 100 : 200);
+
       final dio.FormData formData = dio.FormData.fromMap({
         'titulo': titulo,
         'descripcion': descripcion,
@@ -221,9 +252,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
         'deposito': precio,
         'habitaciones': _camas,
         'banos': _banos,
-        'metros': _tamano == 'Pequeño'
-            ? 50
-            : (_tamano == 'Mediano' ? 100 : 200),
+        'medios_banos': _mediosBanos,
+        'bano_compartido': _banoCompartido ? 1 : 0,
+        'metros': metrosValor,
         'tipo': _categoriaSeleccionada ?? 'Casa',
         'direccion': 'Ocosingo, Chiapas',
         'latitud': _ubicacionActual!.latitude,
@@ -472,15 +503,14 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 20),
-                                  Row(
+                                                              Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: StunningDropdown<int>(
                                           value: _camas,
-                                          label: 'Camas',
+                                          label: 'Habitaciones',
                                           icon: Icons.bed_rounded,
                                           items: [1, 2, 3, 4, 5]
                                               .map(
@@ -498,9 +528,9 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                                       Expanded(
                                         child: StunningDropdown<int>(
                                           value: _banos,
-                                          label: 'Baños',
+                                          label: 'Baños completos',
                                           icon: Icons.bathtub_rounded,
-                                          items: [1, 2, 3, 4]
+                                          items: [0, 1, 2, 3, 4]
                                               .map(
                                                 (n) => DropdownMenuItem(
                                                   value: n,
@@ -514,7 +544,63 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 12),
+                                  StunningDropdown<int>(
+                                    value: _mediosBanos,
+                                    label: 'Medios Baños',
+                                    icon: Icons.water_rounded,
+                                    items: [0, 1, 2]
+                                        .map(
+                                          (n) => DropdownMenuItem(
+                                            value: n,
+                                            child: Text(
+                                              n == 0 ? 'Sin medio baño' : '$n medio baño${n > 1 ? 's' : ''}',
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) =>
+                                        setState(() => _mediosBanos = v!),
+                                  ),
+
                                   const SizedBox(height: 20),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _banoCompartido
+                                          ? MiTema.celeste.withValues(
+                                              alpha: 0.1,
+                                            )
+                                          : Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: _banoCompartido
+                                            ? MiTema.celeste.withValues(
+                                                alpha: 0.3,
+                                              )
+                                            : Colors.grey[300]!,
+                                      ),
+                                    ),
+                                    child: SwitchListTile(
+                                      title: Text(
+                                        'Baño compartido',
+                                        style: TextStyle(
+                                          color: _banoCompartido
+                                              ? MiTema.azul
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      value: _banoCompartido,
+                                      activeThumbColor: MiTema.celeste,
+                                      onChanged: (val) =>
+                                          setState(() => _banoCompartido = val),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,

@@ -241,6 +241,10 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
 
     final camas = Parser.paramInt(inmueble['habitaciones']);
     final banos = Parser.paramInt(inmueble['banos']);
+    final mediosBanos = Parser.paramInt(inmueble['medios_banos']);
+    final banoCompartido = inmueble['bano_compartido'] == true ||
+        inmueble['bano_compartido'] == 1 ||
+        inmueble['bano_compartido'] == "1";
     final metros = Parser.paramInt(inmueble['metros']);
 
     return Scaffold(
@@ -473,12 +477,14 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                           _StatItem(
                             icon: Icons.bed_rounded,
                             value: '$camas',
-                            label: 'Camas',
+                            label: 'Hab.',
                           ),
                           _VerticalDivider(),
                           _StatItem(
                             icon: Icons.bathtub_outlined,
-                            value: '$banos',
+                            value: banos > 0
+                                ? (mediosBanos > 0 ? '$banos + ½' : '$banos')
+                                : (mediosBanos > 0 ? '½' : '0'),
                             label: 'Baños',
                           ),
                           _VerticalDivider(),
@@ -490,6 +496,36 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         ],
                       ),
                     ),
+                    if (banoCompartido) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange[300]!),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.people_outline_rounded,
+                                size: 16, color: Colors.orange[700]),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Baño compartido',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     Text(
                       'Descripción',
@@ -946,9 +982,8 @@ class _FormularioResenaSheetState extends State<_FormularioResenaSheet> {
     setState(() => _isLoading = true);
     try {
       final response = await _api.post(
-        '/resenas',
+        '/inmuebles/${widget.inmuebleId}/resenas',
         data: {
-          'inmueble_id': widget.inmuebleId,
           'puntuacion': _puntuacion,
           'comentario': _comentarioController.text,
         },

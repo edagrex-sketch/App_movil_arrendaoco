@@ -73,6 +73,7 @@ class AuthService {
           'success': true,
           'user': LocalUser(uid: userData['id'].toString()),
           'userData': {
+            'id': userData['id'],
             'nombre': userData['nombre'],
             'email': userData['email'],
             'rol': userRole,
@@ -102,7 +103,10 @@ class AuthService {
     try {
       final response = await _api.get('/me');
       if (response.statusCode == 200) {
-        final userData = response.data['data'];
+        // /me devuelve UserResource directamente (no anidado en 'data')
+        final userData = response.data is Map ? response.data : null;
+        if (userData == null) return null;
+
         final rolesList =
             (userData['roles'] as List<dynamic>?)
                 ?.map((e) => e.toString())
@@ -131,6 +135,7 @@ class AuthService {
           'id': userData['id'].toString(),
           'nombre': userData['nombre'],
           'email': userData['email'],
+          'foto_perfil': userData['foto_perfil'],
           'rol': userRole,
           'roles': rolesList,
           'public_id': userData['id'].toString(),
@@ -199,4 +204,10 @@ class AuthService {
       'message': 'Si el email está registrado, recibirás un correo.',
     };
   }
+
+  Future<void> updateBaseUrl(String url) async {
+    await _api.setCustomBaseUrl(url);
+  }
+
+  String get currentBaseUrl => _api.currentBaseUrl;
 }

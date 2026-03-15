@@ -90,7 +90,6 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
               ),
               child: FloatingActionButton.extended(
                 elevation: 0,
-                backgroundColor: Colors.transparent,
                 onPressed: () async {
                   await Navigator.push(
                     context,
@@ -406,6 +405,7 @@ class InicioFeedState extends State<InicioFeed> {
                                   ),
                                 ),
                               );
+                              _cargarInmuebles();
                             },
                             icon: const Icon(
                               Icons.edit_rounded,
@@ -463,9 +463,12 @@ class InicioFeedState extends State<InicioFeed> {
                                 ),
                               );
 
-                              if (confirm == true) {
-                                await _eliminarInmueble(i['id'] as int);
-                              }
+                                if (confirm == true) {
+                                  final id = int.tryParse(i['id'].toString()) ?? 0;
+                                  if (id > 0) {
+                                    await _eliminarInmueble(id);
+                                  }
+                                }
                             },
                             icon: const Icon(
                               Icons.delete_rounded,

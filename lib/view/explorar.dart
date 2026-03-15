@@ -221,6 +221,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
 
         final habitaciones = Parser.paramInt(i['habitaciones']);
         final banos = Parser.paramInt(i['banos']);
+        final mediosBanos = Parser.paramInt(i['medios_banos']);
         final metros = Parser.paramInt(i['metros']);
 
         return StunningCard(
@@ -357,7 +358,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                             const SizedBox(width: 12),
                             _FeatureChip(
                               icon: Icons.bathtub_rounded,
-                              text: '$banos baños',
+                              text: mediosBanos > 0 ? '${banos + (mediosBanos * 0.5)} baños' : '$banos baños',
                             ),
                             const SizedBox(width: 12),
                             _FeatureChip(

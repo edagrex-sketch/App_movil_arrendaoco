@@ -294,13 +294,19 @@ class BaseDatos {
 
   static Future<void> actualizarEstadoRenta(int id, String estado) async {
     try {
-      // Laravel uses renover/cancelar or we can add a generic one.
-      // For now, let's assume we might need a generic update or specific actions.
-      if (estado == 'cancelada') {
-        await _api.post('/contratos/$id/cancelar');
-      }
+      await _api.put('/contratos/$id', data: {'estado': estado});
     } catch (e) {
       debugPrint('Error actualizando estado renta: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>?> obtenerRentaPorId(int id) async {
+    try {
+      final response = await _api.get('/contratos/$id');
+      return response.data['data'];
+    } catch (e) {
+      debugPrint('Error obteniendo renta $id: $e');
+      return null;
     }
   }
 
@@ -317,7 +323,7 @@ class BaseDatos {
       final List data = response.data['data'] ?? [];
       return List<Map<String, dynamic>>.from(
         data,
-      ).where((r) => r['arrendador_id'] == arrendadorId).toList();
+      ).where((r) => r['arrendador_id'].toString() == arrendadorId.toString()).toList();
     } catch (e) {
       return [];
     }
@@ -331,24 +337,13 @@ class BaseDatos {
       final List data = response.data['data'] ?? [];
       return List<Map<String, dynamic>>.from(
         data,
-      ).where((r) => r['inquilino_id'] == inquilinoId).toList();
+      ).where((r) => r['inquilino_id'].toString() == inquilinoId.toString()).toList();
     } catch (e) {
       return [];
     }
   }
 
-  static Future<Map<String, dynamic>?> obtenerRentaPorId(int id) async {
-    try {
-      // This is a bit tricky as we don't have a direct /contratos/{id} that returns this specific format
-      // But we can filter the index or add a show method to ContratoController
-      final response = await _api.get('/contratos');
-      final List data = response.data['data'] ?? [];
-      final match = data.firstWhere((r) => r['id'] == id, orElse: () => null);
-      return match;
-    } catch (e) {
-      return null;
-    }
-  }
+
 
   static Future<int> verificarInquilinoExiste(String email) async {
     // Instead of querying Supabase, we could add a verify-user endpoint.

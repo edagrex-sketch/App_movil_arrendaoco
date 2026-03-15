@@ -111,6 +111,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       SesionActual.nombre = '';
       SesionActual.email = '';
       SesionActual.rol = '';
+      SesionActual.todosLosRoles = [];
       SesionActual.publicId = null;
 
       FCMService.dispose();
@@ -437,7 +438,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       _SettingsTile(
                         icon: Icons.calendar_month_rounded,
                         title: 'Calendario',
-                        showDivider: SesionActual.tieneMultiplesRoles,
+                        showDivider: SesionActual.canSwitchDashboard,
                         onTap: () {
                           if (SesionActual.esPropietario) {
                             Navigator.push(
@@ -458,7 +459,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           }
                         },
                       ),
-                      if (SesionActual.tieneMultiplesRoles)
+                      if (SesionActual.canSwitchDashboard)
                         _SettingsTile(
                           icon: Icons.swap_horiz_rounded,
                           title: SesionActual.esPropietario
@@ -469,6 +470,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                             final uid = SesionActual.usuarioId ?? '';
                             if (SesionActual.esPropietario) {
                               // Cambiar a Inquilino
+                              SesionActual.rol = 'inquilino';
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
@@ -479,6 +481,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
                               );
                             } else {
                               // Cambiar a Arrendador
+                              SesionActual.rol = SesionActual.todosLosRoles.firstWhere(
+                                (r) => r.toLowerCase() == 'arrendador' || r.toLowerCase() == 'propietario' || r.toLowerCase() == 'admin',
+                                orElse: () => 'arrendador',
+                              );
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(

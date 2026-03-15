@@ -39,9 +39,12 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
 
     try {
       final rentas = await BaseDatos.obtenerRentasPorInquilino(uid);
+      final eventos = await BaseDatos.obtenerEventosPorUsuario(uid);
+
       if (mounted) {
         setState(() {
           _rentas = rentas;
+          _eventos = eventos;
           _isLoading = false;
         });
       }
@@ -50,6 +53,7 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     }
   }
 
+  @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Center(
@@ -310,7 +314,8 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
 
   Widget _buildSolicitudCard(Map<String, dynamic> renta) {
     final titulo = renta['inmueble_titulo'] ?? 'Propiedad';
-    final monto = renta['monto_mensual'] ?? 0;
+    final m = renta['monto_mensual'];
+    final double monto = double.tryParse(m?.toString() ?? '0') ?? 0.0;
     final arrendador = renta['arrendador_nombre'] ?? 'Arrendador';
     final rutasRaw = (renta['rutas_imagen'] as String?) ?? '';
     final imageUrls = rutasRaw.isNotEmpty ? rutasRaw.split(',') : [];
@@ -421,7 +426,7 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
                             size: 20,
                           ),
                           Text(
-                            '$monto',
+                            monto.toString(),
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -500,7 +505,8 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
 
   Widget _buildRentaCard(Map<String, dynamic> renta) {
     final titulo = renta['inmueble_titulo'] ?? '';
-    final monto = renta['monto_mensual'] ?? 0;
+    final m = renta['monto_mensual'];
+    final double monto = double.tryParse(m?.toString() ?? '0') ?? 0.0;
     final diaPago = renta['dia_pago'] ?? 1;
     final estado = renta['estado'] ?? 'activa';
     final rutasRaw = (renta['rutas_imagen'] as String?) ?? '';
@@ -676,7 +682,7 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
                             ),
                           ),
                           Text(
-                            '\$$monto',
+                            '\$${monto.toString()}',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w900,
@@ -888,6 +894,7 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
             icon: Icon(Icons.delete_outline, color: Colors.grey[400]),
             onPressed: () async {
               await BaseDatos.eliminarEvento(evento['id'] as int);
+              _refreshData();
             },
           ),
         ],

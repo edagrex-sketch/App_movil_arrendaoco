@@ -62,16 +62,16 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
             return const Center(child: Text('Renta no encontrada'));
           }
 
-          final esArrendador = usuarioId == renta['arrendador_id'];
-          final monto = renta['monto_mensual'] ?? 0;
-          final diaPago = renta['dia_pago'] ?? 0;
+          // esArrendador: comparar como String para evitar int vs String mismatch
+          final esArrendador = usuarioId?.toString() == renta['arrendador_id']?.toString();
+          // monto_mensual viene como num o String desde la API
+          final montoRaw = renta['monto_mensual'];
+          final monto = double.tryParse(montoRaw?.toString() ?? '0') ?? 0.0;
+          final diaPago = renta['dia_pago'] ?? 5;
           final estado = renta['estado'] ?? 'activa';
           final inmuebleTitulo = renta['inmueble_titulo'] ?? 'Inmueble';
-          final imageUrlsRaw = (renta['rutas_imagen'] as String?) ?? '';
-          final imageUrls = imageUrlsRaw.isNotEmpty
-              ? imageUrlsRaw.split(',')
-              : [];
-          final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
+          // rutas_imagen es una URL directa (String), NO una lista CSV
+          final primeraUrl = renta['rutas_imagen'] as String?;
 
           final otraParte = esArrendador
               ? renta['inquilino_nombre']
@@ -163,7 +163,7 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                               child: _buildInfoCard(
                                 icon: Icons.attach_money_rounded,
                                 label: 'Mensualidad',
-                                value: '\$$monto',
+                                value: '\$${monto.toStringAsFixed(0)}',
                                 color: MiTema.vino,
                               ),
                             ),
@@ -353,11 +353,18 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
   }
 
   Widget _buildPagoCard(Map<String, dynamic> pago, bool esArrendador) {
-    final mes = pago['mes'] ?? '';
+    final mesNum = pago['mes'] ?? 0;
     final anio = pago['anio'] ?? 0;
-    final monto = pago['monto'] ?? 0;
-    final estado = pago['estado'] ?? 'pendiente';
+    final monto = double.tryParse(pago['monto']?.toString() ?? '0') ?? 0.0;
+    final estado = pago['estatus'] ?? 'pendiente'; // API usa 'estatus'
     final fechaPago = pago['fecha_pago'];
+
+    // Convertir número de mes a nombre
+    const meses = [
+      '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    final mesNombre = (mesNum >= 1 && mesNum <= 12) ? meses[mesNum] : 'Mes $mesNum';
 
     Color estadoColor;
     IconData estadoIcon;
@@ -366,11 +373,11 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
         estadoColor = Colors.green;
         estadoIcon = Icons.check_circle;
         break;
-      case 'atrasado':
+      case 'vencido': // La API usa 'vencido' no 'atrasado'
         estadoColor = Colors.red;
         estadoIcon = Icons.error;
         break;
-      default:
+      default: // pendiente
         estadoColor = Colors.orange;
         estadoIcon = Icons.pending;
     }
@@ -393,7 +400,7 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$mes $anio',
+                  '$mesNombre $anio',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -402,7 +409,7 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '\$$monto',
+                  '\$${monto.toStringAsFixed(0)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: MiTema.vino,

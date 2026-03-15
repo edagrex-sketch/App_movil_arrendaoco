@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/view/explorar.dart';
@@ -29,9 +28,17 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
     'Mi Perfil',
   ];
 
+  late final List<Widget> _pages;
+
   @override
   void initState() {
     super.initState();
+    _pages = [
+      const ExplorarScreen(),
+      const MisRentasScreen(),
+      const FavoritosScreen(),
+      const PerfilScreen(),
+    ];
     final uid = int.tryParse(widget.usuarioId) ?? 0;
     if (uid > 0) {
       FCMService.initialize(uid);
@@ -40,12 +47,6 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      const ExplorarScreen(),
-      const MisRentasScreen(),
-      const FavoritosScreen(),
-      const PerfilScreen(),
-    ];
 
     return Scaffold(
       backgroundColor: ArrendaColors.background,
@@ -152,7 +153,7 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
         backgroundColor: Colors.orange,
         child: const Icon(Icons.pets_rounded, color: Colors.white),
       ),
-      body: SafeArea(child: pages[_currentIndex]),
+      body: SafeArea(child: _pages[_currentIndex]),
     );
   }
 }

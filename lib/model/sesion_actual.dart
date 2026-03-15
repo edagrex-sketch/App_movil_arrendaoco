@@ -20,4 +20,14 @@ class SesionActual {
   }
 
   static bool get tieneMultiplesRoles => todosLosRoles.length > 1;
+
+  static bool get canSwitchDashboard {
+    return todosLosRoles.any((r) {
+      final lr = r.toLowerCase().trim();
+      return lr == 'arrendador' ||
+          lr == 'propietario' ||
+          lr == 'admin' ||
+          lr == 'administrador';
+    });
+  }
 }

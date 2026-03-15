@@ -329,12 +329,75 @@ class LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2),
+
+                    const SizedBox(height: 20),
+
+                    // Botón de configuración de servidor (Debug/Dev)
+                    Opacity(
+                      opacity: 0.6,
+                      child: TextButton.icon(
+                        onPressed: () => _showServerConfig(context),
+                        icon: const Icon(Icons.settings_remote_rounded, size: 18),
+                        label: const Text('Configurar Servidor'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                        ),
+                      ),
+                    ).animate().fadeIn(delay: 800.ms),
                   ],
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showServerConfig(BuildContext context) {
+    final controller = TextEditingController(text: _authService.currentBaseUrl);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Configuración de API'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Ingresa la URL base de tu servidor Laravel:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'http://192.168.1.107:8003/api',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '• Emulador: http://10.0.2.2:8003/api\n• WiFi: http://tu-ip:8003/api',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _authService.updateBaseUrl(controller.text.trim());
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Servidor actualizado correctamente')),
+              );
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
       ),
     );
   }

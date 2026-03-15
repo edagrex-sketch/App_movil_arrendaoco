@@ -4,7 +4,6 @@ import 'package:arrendaoco/model/bd.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_renta.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
-
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
@@ -63,9 +62,9 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
     double total = 0;
     for (var renta in rentas) {
       if (renta['estado'] == 'activa') {
-        final monto = renta['monto_mensual'] ?? 0;
-        // Convert int to double if necessary or ensure it's num
-        total += (monto is int) ? monto.toDouble() : (monto as double);
+        final m = renta['monto_mensual'];
+        final double monto = double.tryParse(m?.toString() ?? '0') ?? 0.0;
+        total += monto;
       }
     }
     return total;
@@ -496,7 +495,8 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
   Widget _buildRentaCard(Map<String, dynamic> renta) {
     final titulo = renta['inmueble_titulo'] ?? '';
     final inquilino = renta['inquilino_nombre'] ?? 'Sin asignar';
-    final monto = renta['monto_mensual'] ?? 0;
+    final m = renta['monto_mensual'];
+    final double monto = double.tryParse(m?.toString() ?? '0') ?? 0.0;
     final estado = renta['estado'] ?? 'activa';
     final rutasRaw = (renta['rutas_imagen'] as String?) ?? '';
     final imageUrls = rutasRaw.isNotEmpty ? rutasRaw.split(',') : [];
@@ -654,7 +654,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                             ),
                           ),
                           Text(
-                            '\$$monto',
+                            '\$${monto.toString()}',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -820,6 +820,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
             icon: Icon(Icons.delete_outline, color: Colors.grey[400]),
             onPressed: () async {
               await BaseDatos.eliminarEvento(evento['id'] as int);
+              _refreshData();
             },
           ),
         ],
@@ -990,6 +991,7 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
 
                   if (context.mounted) {
                     Navigator.pop(context);
+                    _refreshData();
                   }
                 },
                 text: 'GUARDAR ACCIÓN',
@@ -1281,8 +1283,12 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
                           'arrendador_id': uid,
                           'inquilino_id': inquilinoId,
                           'fecha_inicio': fechaInicio.toIso8601String(),
+                          'fecha_fin': fechaInicio
+                              .add(const Duration(days: 365))
+                              .toIso8601String(), // Default 1 year
                           'monto_mensual': monto,
                           'dia_pago': diaPago,
+                          'deposito': monto, // Default 1 month
                           'estado': 'pendiente',
                         });
 
