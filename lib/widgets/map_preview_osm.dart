@@ -5,11 +5,15 @@ import 'package:latlong2/latlong.dart';
 class MapPreviewOsm extends StatelessWidget {
   final double lat;
   final double lng;
+  final Function(LatLng)? onTap;
+  final MapController? controller;
 
   const MapPreviewOsm({
     super.key,
     required this.lat,
     required this.lng,
+    this.onTap,
+    this.controller,
   });
 
   @override
@@ -21,9 +25,13 @@ class MapPreviewOsm extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: FlutterMap(
+          mapController: controller,
           options: MapOptions(
             initialCenter: punto,
             initialZoom: 16,
+            onTap: (tapPosition, point) {
+              if (onTap != null) onTap!(point);
+            },
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
             ),

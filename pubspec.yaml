@@ -35,6 +35,7 @@ dependencies:
   dio: ^5.7.0
   shared_preferences: ^2.5.2
   supabase: ^2.6.0
+  pusher_channels_flutter: ^2.2.0
   
 
 
@@ -56,6 +57,7 @@ flutter:
 
   # Declarar los assets correctamente
   assets:
-    - "assets/images/logo.png"  # Ruta a tu imagen (ajústala si usas otra carpeta)
+    - "assets/images/logo.png"
+    - "assets/images/roco_ai.png"  # Ruta a tu imagen (ajústala si usas otra carpeta)
     - "assets/icon/logo.png"
     - "assets/animations/"  # Animaciones Lottie

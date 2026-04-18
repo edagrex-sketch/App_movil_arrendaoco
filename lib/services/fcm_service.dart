@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'package:arrendaoco/services/api_service.dart';
 
 // Handler de segundo plano (debe ser top-level)
 @pragma('vm:entry-point')
@@ -78,8 +79,15 @@ class FCMService {
   }
 
   static Future<void> _actualizarTokenEnLaravel(int uid, String token) async {
-    // TODO: Implementar en BaseDatos.actualizarTokenFCM(uid, token)
-    print('ℹ️ FCMService: Token FCM listo para Laravel: $token');
+    try {
+      final api = ApiService();
+      final response = await api.post('/fcm-token', data: {'fcm_token': token});
+      if (response.statusCode == 200) {
+        print('✅ FCM Token actualizado en Laravel');
+      }
+    } catch (e) {
+      print('❌ Error enviando token FCM a Laravel: $e');
+    }
   }
 
   static void dispose() {

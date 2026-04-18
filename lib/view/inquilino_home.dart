@@ -8,6 +8,7 @@ import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
 import 'package:arrendaoco/view/roco_chat.dart';
+import 'package:arrendaoco/view/chats/chat_list_screen.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
   final String usuarioId;
@@ -23,6 +24,7 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
 
   final List<String> _titulos = [
     'Explorar',
+    'Mensajes',
     'Mis Rentas',
     'Mis Favoritos',
     'Mi Perfil',
@@ -35,6 +37,7 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
     super.initState();
     _pages = [
       const ExplorarScreen(),
+      const ChatListScreen(), 
       const MisRentasScreen(),
       const FavoritosScreen(),
       const PerfilScreen(),
@@ -112,6 +115,14 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
                 color: ArrendaColors.primary,
               ),
               label: 'Explorar',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline_rounded, color: Colors.grey[600]),
+              selectedIcon: Icon(
+                Icons.chat_bubble_rounded,
+                color: ArrendaColors.primary,
+              ),
+              label: 'Mensajes',
             ),
             NavigationDestination(
               icon: Icon(Icons.receipt_long_outlined, color: Colors.grey[600]),

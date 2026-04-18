@@ -11,6 +11,9 @@ import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
 import 'package:arrendaoco/utils/casting.dart';
+import 'package:arrendaoco/view/chats/chat_list_screen.dart';
+import 'package:arrendaoco/view/roco_chat.dart';
+
 
 class ArrendadorScreen extends StatefulWidget {
   final String usuarioId;
@@ -23,6 +26,7 @@ class ArrendadorScreen extends StatefulWidget {
 
 class ArrendadorScreenState extends State<ArrendadorScreen> {
   int currentIndex = 0;
+  final GlobalKey<InicioFeedState> _feedKey = GlobalKey<InicioFeedState>();
 
   @override
   void initState() {
@@ -36,8 +40,9 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      InicioFeed(usuarioId: widget.usuarioId),
+      InicioFeed(key: _feedKey, usuarioId: widget.usuarioId),
       const ExplorarScreen(),
+      const ChatListScreen(), 
       const PerfilScreen(),
     ];
 
@@ -75,45 +80,67 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
           NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
         ],
       ),
-      floatingActionButton: currentIndex == 0
-          ? Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                gradient: AppGradients.accentGradient,
-                boxShadow: [
-                  BoxShadow(
-                    color: ArrendaColors.error.withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: FloatingActionButton.extended(
-                elevation: 0,
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RegistrarInmuebleScreen(
-                        propietarioId: widget.usuarioId,
-                      ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          currentIndex == 0
+            ? Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(30),
+                  gradient: AppGradients.accentGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: ArrendaColors.error.withOpacity(0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.add_location_alt_outlined,
-                  color: Colors.white,
+                  ],
                 ),
-                label: const Text(
-                  'Publicar',
-                  style: TextStyle(
+                child: FloatingActionButton.extended(
+                  heroTag: 'publishBtn',
+                  elevation: 0,
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RegistrarInmuebleScreen(
+                          propietarioId: widget.usuarioId,
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _feedKey.currentState?.cargarInmuebles();
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.add_location_alt_outlined,
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                  ),
+                  label: const Text(
+                    'Publicar',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-            )
-          : null,
+              )
+            : const SizedBox.shrink(),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'rocoBtn',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => RocoChatScreen()),
+
+              );
+            },
+            backgroundColor: Colors.orange,
+            child: const Icon(Icons.pets_rounded, color: Colors.white),
+          ),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -146,6 +173,14 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
                 color: ArrendaColors.primary,
               ),
               label: 'Explorar',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline_rounded, color: Colors.grey[600]),
+              selectedIcon: Icon(
+                Icons.chat_bubble_rounded,
+                color: ArrendaColors.primary,
+              ),
+              label: 'Mensajes',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline, color: Colors.grey[600]),
@@ -181,10 +216,10 @@ class InicioFeedState extends State<InicioFeed> {
   @override
   void initState() {
     super.initState();
-    _cargarInmuebles();
+    cargarInmuebles();
   }
 
-  Future<void> _cargarInmuebles() async {
+  Future<void> cargarInmuebles() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -215,7 +250,7 @@ class InicioFeedState extends State<InicioFeed> {
     try {
       final response = await _api.delete('/inmuebles/$id');
       if (response.statusCode == 200) {
-        _cargarInmuebles();
+        cargarInmuebles();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Inmueble eliminado con éxito')),
@@ -248,7 +283,7 @@ class InicioFeedState extends State<InicioFeed> {
             Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _cargarInmuebles,
+              onPressed: cargarInmuebles,
               child: const Text('Reintentar'),
             ),
           ],
@@ -258,7 +293,7 @@ class InicioFeedState extends State<InicioFeed> {
 
     if (_inmuebles.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _cargarInmuebles,
+        onRefresh: cargarInmuebles,
         child: ListView(
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.3),
@@ -280,7 +315,7 @@ class InicioFeedState extends State<InicioFeed> {
     }
 
     return RefreshIndicator(
-      onRefresh: _cargarInmuebles,
+      onRefresh: cargarInmuebles,
       child: ListView.separated(
         padding: const EdgeInsets.all(20),
         itemCount: _inmuebles.length,
@@ -405,7 +440,9 @@ class InicioFeedState extends State<InicioFeed> {
                                   ),
                                 ),
                               );
-                              _cargarInmuebles();
+                              if (result == true) {
+                                cargarInmuebles();
+                              }
                             },
                             icon: const Icon(
                               Icons.edit_rounded,

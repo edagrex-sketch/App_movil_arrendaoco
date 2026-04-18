@@ -282,17 +282,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       color: MiTema.rojo,
                     ),
                   ),
-                  if (SesionActual.esPropietario) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.home_work_rounded,
-                        title: 'Publicados',
-                        value: '$_inmueblesCount',
-                        color: MiTema.vino,
-                      ),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.home_work_rounded,
+                      title: 'Publicados',
+                      value: '$_inmueblesCount',
+                      color: MiTema.vino,
                     ),
-                  ],
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(
@@ -309,87 +306,86 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-          // Arrendador Panel
-          if (SesionActual.esPropietario)
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-              sliver: SliverToBoxAdapter(
-                child: StunningCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.real_estate_agent_rounded,
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+            sliver: SliverToBoxAdapter(
+              child: StunningCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.real_estate_agent_rounded,
+                          color: MiTema.azul,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Panel Arrendador',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                             color: MiTema.azul,
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Panel Arrendador',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: MiTema.azul,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _QuickActionButton(
-                              icon: Icons.add_home_work_rounded,
-                              label: 'Publicar',
-                              gradient: AppGradients.accentGradient,
-                              onTap: () async {
-                                final pid = SesionActual.usuarioId ?? '';
-                                if (pid.isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          RegistrarInmuebleScreen(
-                                            propietarioId: pid,
-                                          ),
-                                    ),
-                                  );
-                                  // No need to manual reload as stream handles it
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _QuickActionButton(
+                            icon: Icons.add_home_work_rounded,
+                            label: 'Publicar',
+                            gradient: AppGradients.accentGradient,
+                            onTap: () async {
+                              final pid = SesionActual.usuarioId ?? '';
+                              if (pid.isNotEmpty) {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        RegistrarInmuebleScreen(
+                                          propietarioId: pid,
+                                        ),
+                                  ),
+                                );
+                                if (result == true) {
+                                  _refreshData();
                                 }
-                              },
-                            ),
+                              }
+                            },
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickActionButton(
-                              icon: Icons.dashboard_customize_rounded,
-                              label: 'Gestionar',
-                              gradient: AppGradients.primaryGradient,
-                              onTap: () {
-                                final uid = SesionActual.usuarioId ?? '';
-                                if (uid.isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          ArrendadorScreen(usuarioId: uid),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _QuickActionButton(
+                            icon: Icons.dashboard_customize_rounded,
+                            label: 'Gestionar',
+                            gradient: AppGradients.primaryGradient,
+                            onTap: () {
+                              final uid = SesionActual.usuarioId ?? '';
+                              if (uid.isNotEmpty) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        ArrendadorScreen(usuarioId: uid),
+                                  ),
+                                );
+                              }
+                            },
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
 
-          if (SesionActual.esPropietario)
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
           // Sections
           SliverPadding(

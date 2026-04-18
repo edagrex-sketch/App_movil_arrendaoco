@@ -10,6 +10,9 @@ import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:arrendaoco/utils/casting.dart';
+import 'package:arrendaoco/view/checkout.dart';
+import 'package:arrendaoco/view/chats/chat_screen.dart';
+import 'package:arrendaoco/view/roco_chat.dart';
 
 class DetalleInmuebleScreen extends StatefulWidget {
   final Map inmueble;
@@ -635,7 +638,69 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                     ),
                     const SizedBox(height: 30),
                     _buildSeccionResenas(context),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.pets, color: Colors.orange, size: 25),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '¿Tienes dudas sobre esta casa?',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.orange[900],
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const Text(
+                                  'Pregúntale a Roco, el experto local.',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RocoChatScreen(
+                                    inmuebleId: inmueble['id'],
+                                    initialMessage: 'Roco, cuéntame de esta propiedad: ${inmueble['titulo']}',
+                                  ),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Consultar a Roco'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 100), // Espacio para el botón flotante/inferior
                   ],
                 ),
               ),
@@ -643,6 +708,122 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: disponible && SesionActual.usuarioId != null
+          ? Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final proId = widget.inmueble['usuario_id'] ?? widget.inmueble['propietario_id'];
+                          final inmuId = widget.inmueble['id'];
+                          if (proId == null) return;
+                          
+                          try {
+                            final response = await _api.post('/chats/iniciar/$proId/$inmuId');
+                            if (response.statusCode == 200) {
+                              final chatData = response.data['data'];
+                              if (mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ChatScreen(
+                                      chatId: chatData['id'],
+                                      otroUsuario: chatData['usuario_1'].toString() == SesionActual.usuarioId.toString() 
+                                        ? chatData['usuario2'] 
+                                        : chatData['usuario1'],
+                                      inmueble: chatData['inmueble'],
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint('Error iniciando chat: $e');
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: MiTema.azul, width: 2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Icon(Icons.chat_bubble_outline_rounded, color: MiTema.azul),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: StunningButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CheckoutScreen(inmueble: widget.inmueble),
+                            ),
+                          );
+                        },
+                        text: 'RENTAR AHORA',
+                        icon: Icons.vpn_key_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : (SesionActual.usuarioId != null && 
+             (widget.inmueble['usuario_id'] != null && widget.inmueble['usuario_id'].toString() != SesionActual.usuarioId.toString() ||
+              widget.inmueble['propietario_id'] != null && widget.inmueble['propietario_id'].toString() != SesionActual.usuarioId.toString())
+            ? Container(
+              padding: const EdgeInsets.all(24),
+              child: SafeArea(
+                child: StunningButton(
+                   onPressed: () async {
+                        final proId = widget.inmueble['usuario_id'] ?? widget.inmueble['propietario_id'];
+                        final inmuId = widget.inmueble['id'];
+                        if (proId == null) return;
+                        
+                        try {
+                          final response = await _api.post('/chats/iniciar/$proId/$inmuId');
+                          if (response.statusCode == 200) {
+                            final chatData = response.data['data'];
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChatScreen(
+                                    chatId: chatData['id'],
+                                    otroUsuario: chatData['usuario_1'].toString() == SesionActual.usuarioId.toString() 
+                                      ? chatData['usuario2'] 
+                                      : chatData['usuario1'],
+                                    inmueble: chatData['inmueble'],
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          debugPrint('Error iniciando chat: $e');
+                        }
+                      },
+                  text: 'CONTACTAR AL DUEÑO',
+                  icon: Icons.chat_bubble_outline_rounded,
+                ),
+              ),
+            )
+            : null),
     );
   }
 
@@ -660,17 +841,18 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 color: MiTema.azul,
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _mostrarFormularioResena(),
-              icon: Icon(Icons.edit_note_rounded, color: MiTema.celeste),
-              label: Text(
-                'Escribir opinión',
-                style: TextStyle(
-                  color: MiTema.celeste,
-                  fontWeight: FontWeight.bold,
+            if (SesionActual.usuarioId != null)
+              TextButton.icon(
+                onPressed: () => _mostrarFormularioResena(),
+                icon: Icon(Icons.edit_note_rounded, color: MiTema.celeste),
+                label: Text(
+                  'Escribir opinión',
+                  style: TextStyle(
+                    color: MiTema.celeste,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 12),

@@ -3,7 +3,10 @@ import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/bd.dart';
 
 class RocoChatScreen extends StatefulWidget {
-  const RocoChatScreen({super.key});
+  final int? inmuebleId;
+  final String? initialMessage;
+  
+  const RocoChatScreen({super.key, this.inmuebleId, this.initialMessage});
 
   @override
   State<RocoChatScreen> createState() => _RocoChatScreenState();
@@ -22,6 +25,17 @@ class _RocoChatScreenState extends State<RocoChatScreen> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _controller.text = widget.initialMessage!;
+        _sendMessage();
+      });
+    }
+  }
+
   void _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -29,13 +43,13 @@ class _RocoChatScreenState extends State<RocoChatScreen> {
     setState(() {
       _messages.add({'isUser': true, 'text': text, 'time': DateTime.now()});
       _isLoading = true;
-      _controller.clear();
+      if (text != widget.initialMessage) _controller.clear();
     });
 
     _scrollToBottom();
 
     try {
-      final response = await BaseDatos.enviarMensajeChat(text);
+      final response = await BaseDatos.enviarMensajeChat(text, inmuebleId: widget.inmuebleId);
       if (mounted) {
         setState(() {
           _messages.add({

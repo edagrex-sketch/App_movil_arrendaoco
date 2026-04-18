@@ -9,7 +9,7 @@ class AppGradients {
   );
 
   static const LinearGradient accentGradient = LinearGradient(
-    colors: [ArrendaColors.accent, ArrendaColors.gold],
+    colors: [Color(0xFF9E2A2B), Color(0xFFBD3C3E)], // Vino a Rojo Suave (Premium)
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

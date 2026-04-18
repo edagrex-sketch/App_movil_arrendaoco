@@ -8,7 +8,7 @@ class ApiService {
   static const String _baseUrlKey = 'custom_api_url';
   
   /// IP real de tu PC en la red WiFi local.
-  static const String _lanIp = '192.168.1.107';
+  static const String _lanIp = '192.168.1.116';
   
   /// Puerto que está usando el servidor de PHP/Laravel
   static const String _port = '8003';
@@ -78,13 +78,13 @@ class ApiService {
 
         if (isEmulator) {
           _dio.options.baseUrl = 'http://10.0.2.2:$_port/api';
-          debugPrint('🚀 ApiService: Emulador detectado. Usando 10.0.2.2');
+          debugPrint('ApiService: Emulador detectado. Usando 10.0.2.2');
         } else {
           _dio.options.baseUrl = 'http://$_lanIp:$_port/api';
-          debugPrint('📱 ApiService: Dispositivo físico detectado. Usando $_lanIp');
+          debugPrint('ApiService: Dispositivo físico detectado. Usando $_lanIp');
         }
       } catch (e) {
-        debugPrint('⚠️ ApiService: Error detectando emulador, usando LAN por defecto: $e');
+        debugPrint('ApiService: Error detectando emulador, usando LAN por defecto: $e');
       }
     }
 

@@ -168,11 +168,14 @@ class BaseDatos {
 
   // ================== CHAT (AI / ARRENDITO) ==================
 
-  static Future<String> enviarMensajeChat(String mensaje) async {
+  static Future<String> enviarMensajeChat(String mensaje, {int? inmuebleId}) async {
     try {
       final response = await _api.post(
         '/arrendito/chat',
-        data: {'message': mensaje},
+        data: {
+          'message': mensaje,
+          if (inmuebleId != null) 'inmueble_id': inmuebleId,
+        },
       );
       return response.data['reply'] ??
           'Lo siento, no pude procesar tu mensaje.';

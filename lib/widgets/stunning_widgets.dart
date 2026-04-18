@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
@@ -11,6 +12,7 @@ class StunningTextField extends StatefulWidget {
   final TextInputType keyboardType;
   final int maxLines;
   final bool isPassword;
+  final List<TextInputFormatter>? inputFormatters;
 
   const StunningTextField({
     super.key,
@@ -21,6 +23,7 @@ class StunningTextField extends StatefulWidget {
     this.keyboardType = TextInputType.text,
     this.maxLines = 1,
     this.isPassword = false,
+    this.inputFormatters,
   });
 
   @override
@@ -93,6 +96,7 @@ class _StunningTextFieldState extends State<StunningTextField>
           keyboardType: widget.keyboardType,
           maxLines: widget.maxLines,
           obscureText: _isObscured,
+          inputFormatters: widget.inputFormatters,
           style: TextStyle(color: MiTema.azul, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             labelText: widget.label,
