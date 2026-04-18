@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/utils/validators.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LocalUser {
   final String uid;
@@ -91,6 +92,60 @@ class AuthService {
       };
     } catch (e) {
       return {'success': false, 'message': 'Error inesperado: $e'};
+    }
+  }
+
+  /// Inicia sesión con Google
+  Future<Map<String, dynamic>> signInWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        return {'success': false, 'message': 'Inicio de sesión cancelado.'};
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? accessToken = googleAuth.accessToken;
+
+      if (accessToken == null) {
+        return {'success': false, 'message': 'No se pudo obtener el token de Google.'};
+      }
+
+      // Enviar el token a nuestro backend
+      final response = await _api.post(
+        '/google-login',
+        data: {'access_token': accessToken},
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final token = data['token'];
+        final userData = data['usuario'];
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+        await prefs.setString('user_name', userData['nombre'] ?? '');
+        
+        final rolesList = List<String>.from(userData['roles'] ?? []);
+        final userRole = userData['rol'] ?? 'inquilino';
+
+        await prefs.setString('user_role', userRole);
+        await prefs.setString('user_id', userData['id'].toString());
+
+        return {
+          'success': true,
+          'user': LocalUser(uid: userData['id'].toString()),
+          'userData': userData,
+        };
+      }
+
+      return {'success': false, 'message': 'Error al autenticar con el servidor.'};
+    } catch (e) {
+      debugPrint('Error Google Sign In: $e');
+      return {'success': false, 'message': 'Error al iniciar sesión con Google.'};
     }
   }
 

@@ -17,14 +17,8 @@ class ApiService {
   static const bool _forceEmulator = false;
 
   static String get defaultBaseUrl {
-    // 10.0.2.2 es la IP especial en Android para acceder al localhost del PC.
-    // Usamos _lanIp para dispositivos físicos.
-    
-    // Por ahora, para no complicar con Future en un getter estático, 
-    // dejamos la lógica preparada para que el usuario pueda cambiarla 
-    // o detectarla en el constructor.
-    final host = _forceEmulator ? '10.0.2.2' : _lanIp; 
-    return 'http://$host:$_port/api';
+    // URL de producción (Correcta por defecto)
+    return 'https://arrendaoco-6gsmvomb.on-forge.com/api';
   }
 
   late final Dio _dio;
@@ -53,39 +47,9 @@ class ApiService {
     if (customUrl != null && customUrl.isNotEmpty) {
       _dio.options.baseUrl = customUrl;
     } else {
-      // Detección automática de emulador
-      try {
-        final deviceInfo = DeviceInfoPlugin();
-        bool isEmulator = false;
-        
-        if (Platform.isAndroid) {
-          final androidInfo = await deviceInfo.androidInfo;
-          // Detección robusta de emuladores Android
-          isEmulator = !androidInfo.isPhysicalDevice ||
-              androidInfo.model.contains('google_sdk') ||
-              androidInfo.model.contains('Emulator') ||
-              androidInfo.model.contains('Android SDK built for x86') ||
-              androidInfo.hardware.contains('goldfish') ||
-              androidInfo.hardware.contains('ranchu') ||
-              androidInfo.brand.startsWith('generic') ||
-              androidInfo.device.startsWith('generic') ||
-              androidInfo.fingerprint.startsWith('generic');
-        } else if (Platform.isIOS) {
-          final iosInfo = await deviceInfo.iosInfo;
-          isEmulator = !iosInfo.isPhysicalDevice || 
-              iosInfo.model.toLowerCase().contains('simulator');
-        }
-
-        if (isEmulator) {
-          _dio.options.baseUrl = 'http://10.0.2.2:$_port/api';
-          debugPrint('ApiService: Emulador detectado. Usando 10.0.2.2');
-        } else {
-          _dio.options.baseUrl = 'http://$_lanIp:$_port/api';
-          debugPrint('ApiService: Dispositivo físico detectado. Usando $_lanIp');
-        }
-      } catch (e) {
-        debugPrint('ApiService: Error detectando emulador, usando LAN por defecto: $e');
-      }
+      // Usamos el defaultBaseUrl definido arriba (Producción)
+      _dio.options.baseUrl = defaultBaseUrl;
+      debugPrint('ApiService: Usando URL por defecto (Producción): $defaultBaseUrl');
     }
 
     _dio.interceptors.add(

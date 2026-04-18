@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "1051916100968",
-    "project_id": "arrendaoco-v2",
-    "storage_bucket": "arrendaoco-v2.firebasestorage.app"
+    "project_number": "32992727938",
+    "project_id": "arrendaoco-fad79",
+    "storage_bucket": "arrendaoco-fad79.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1051916100968:android:9e555fe9725d3d8cf962dd",
+        "mobilesdk_app_id": "1:32992727938:android:65b31791c56e44589e359b",
         "android_client_info": {
           "package_name": "com.arrendaoco.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDsTrDtJ5oqydmRl15WNcrh7c9c4OyWTiY"
+          "current_key": "AIzaSyBGmVWyuc2NaSC4WJf1HDMOMEV28CAJrLc"
         }
       ],
       "services": {

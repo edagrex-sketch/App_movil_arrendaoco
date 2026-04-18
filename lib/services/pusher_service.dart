@@ -23,6 +23,9 @@ class PusherService {
     final uri = Uri.parse(baseUrl);
     final host = uri.host;
     const port = 8080;
+    final isProduction = host.contains('on-forge.com');
+    final reverbHost = isProduction ? '147.182.133.142' : host;
+    final useTLS = isProduction; // Habilitar SSL si es producción (si está configurado)
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -30,11 +33,8 @@ class PusherService {
 
       await _pusher.init(
         apiKey: _appKey,
-        cluster: "us2", // Valor por defecto necesario para la lib
-        useTLS: false,
-        // Nota: Para Reverb custom host, la lib usa proxy o configuraciones internas
-        // En versiones recientes, si no detecta host, se puede pasar via cluster "" 
-        // pero lo más seguro es dejar los callbacks primero:
+        cluster: "us2", 
+        useTLS: useTLS,
         onConnectionStateChange: (currentState, previousState) {
           debugPrint("Pusher Connection State: $currentState");
         },

@@ -129,6 +129,47 @@ class LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> loginWithGoogle() async {
+    if (!mounted) return;
+    LottieLoading.showLoadingDialog(context, message: 'Conectando con Google...');
+
+    try {
+      final result = await _authService.signInWithGoogle();
+
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+
+      if (result['success']) {
+        final userData = result['userData'] as Map<String, dynamic>;
+
+        SesionActual.usuarioId = userData['id']?.toString();
+        SesionActual.nombre = userData['nombre'] ?? '';
+        SesionActual.email = userData['email'] ?? '';
+        SesionActual.rol = userData['rol'] ?? 'inquilino';
+        SesionActual.todosLosRoles = List<String>.from(userData['roles'] ?? []);
+        SesionActual.publicId = userData['public_id']?.toString();
+
+        if (SesionActual.usuarioId != null) {
+          _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
+        }
+      } else {
+        if (result['message'] != 'Inicio de sesión cancelado.') {
+          await LottieFeedback.showError(
+            context,
+            message: result['message'] ?? 'Error al iniciar sesión con Google',
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+      await LottieFeedback.showError(
+        context,
+        message: 'Error inesperado: ${e.toString()}',
+      );
+    }
+  }
+
   Future<void> resetPassword() async {
     final email = emailController.text.trim();
     if (email.isEmpty) {
@@ -291,6 +332,51 @@ class LoginScreenState extends State<LoginScreen> {
                                   text: 'INICIAR SESIÓN',
                                   icon: Icons.login_rounded,
                                 ),
+
+                                const SizedBox(height: 20),
+
+                                Row(
+                                  children: [
+                                    Expanded(child: Divider(color: Colors.grey[300])),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      child: Text(
+                                        'O continúa con',
+                                        style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(child: Divider(color: Colors.grey[300])),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                OutlinedButton.icon(
+                                  onPressed: loginWithGoogle,
+                                  icon: Image.network(
+                                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                                    height: 24,
+                                  ),
+                                  label: const Text(
+                                    'Iniciar sesión con Google',
+                                    style: TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    minimumSize: const Size(double.infinity, 50),
+                                    side: BorderSide(color: Colors.grey[300]!),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -370,13 +456,13 @@ class LoginScreenState extends State<LoginScreen> {
             TextField(
               controller: controller,
               decoration: const InputDecoration(
-                hintText: 'http://192.168.1.107:8003/api',
+                hintText: 'https://arrendaoco-6gsmvomb.on-forge.com/api',
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             const Text(
-              '• Emulador: http://10.0.2.2:8003/api\n• WiFi: http://tu-ip:8003/api',
+              '• Producción: https://arrendaoco-6gsmvomb.on-forge.com/api\n• Local: http://192.168.1.116:8003/api',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],

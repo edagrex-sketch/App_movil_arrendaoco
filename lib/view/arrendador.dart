@@ -430,7 +430,7 @@ class InicioFeedState extends State<InicioFeed> {
                         children: [
                           TextButton.icon(
                             onPressed: () async {
-                              await Navigator.push(
+                              final result = await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => RegistrarInmuebleScreen(

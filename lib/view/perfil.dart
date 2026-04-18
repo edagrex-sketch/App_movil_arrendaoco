@@ -16,6 +16,7 @@ import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/services/auth_service.dart';
+import 'package:arrendaoco/view/chat_lista.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
 import 'dart:async';
 
@@ -297,6 +298,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       title: 'Mensajes',
                       value: '0',
                       color: MiTema.celeste,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ChatListaScreen()),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -586,50 +593,55 @@ class _StatCard extends StatelessWidget {
   final String title;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
     required this.title,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
             ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w600,
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
-          ),
-        ],
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
