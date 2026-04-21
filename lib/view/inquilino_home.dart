@@ -6,27 +6,33 @@ import 'package:arrendaoco/view/favoritos.dart';
 import 'package:arrendaoco/view/perfil.dart';
 import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/widgets/notification_badge.dart';
 import 'package:arrendaoco/view/roco_chat.dart';
+import 'package:arrendaoco/widgets/premium_navbar.dart';
 import 'package:arrendaoco/view/chats/chat_list_screen.dart';
+import 'package:arrendaoco/widgets/animated_rocco_fab.dart';
 
 class InquilinoHomeScreen extends StatefulWidget {
   final String usuarioId;
+  final int initialIndex;
 
-  const InquilinoHomeScreen({super.key, required this.usuarioId});
+  const InquilinoHomeScreen({
+    super.key, 
+    required this.usuarioId,
+    this.initialIndex = 0,
+  });
 
   @override
   State<InquilinoHomeScreen> createState() => _InquilinoHomeScreenState();
 }
 
 class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   final List<String> _titulos = [
-    'Explorar',
-    'Mensajes',
+    'Inicio',
     'Mis Rentas',
-    'Mis Favoritos',
     'Mi Perfil',
   ];
 
@@ -35,11 +41,10 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _pages = [
       const ExplorarScreen(),
-      const ChatListScreen(), 
       const MisRentasScreen(),
-      const FavoritosScreen(),
       const PerfilScreen(),
     ];
     final uid = int.tryParse(widget.usuarioId) ?? 0;
@@ -53,7 +58,7 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
 
     return Scaffold(
       backgroundColor: ArrendaColors.background,
-      extendBodyBehindAppBar: true,
+      extendBody: false,
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
@@ -86,85 +91,36 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
           NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          backgroundColor: Colors.transparent,
-          indicatorColor: ArrendaColors.accent.withOpacity(0.15),
-          elevation: 0,
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) {
-            setState(() {
-              _currentIndex = i;
-            });
-          },
-          destinations: [
-            NavigationDestination(
-              icon: Icon(Icons.search_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.search_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Explorar',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline_rounded, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.chat_bubble_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Mensajes',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.receipt_long_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Mis Rentas',
-            ),
-            NavigationDestination(
-              icon: Icon(
-                Icons.favorite_border_rounded,
-                color: Colors.grey[600],
-              ),
-              selectedIcon: Icon(
-                Icons.favorite_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Favoritos',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.person_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Perfil',
-            ),
-          ],
-        ),
+      bottomNavigationBar: PremiumFloatingNavBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        items: const [
+          StunningNavItem(
+            icon: Icons.home_outlined, 
+            selectedIcon: Icons.home_rounded, 
+            label: 'Explorar',
+          ),
+          StunningNavItem(
+            icon: Icons.receipt_long_outlined, 
+            selectedIcon: Icons.receipt_long_rounded, 
+            label: 'Mis Rentas',
+          ),
+          StunningNavItem(
+            icon: Icons.person_outline_rounded, 
+            selectedIcon: Icons.person_rounded, 
+            label: 'Perfil',
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const RocoChatScreen()),
-          );
-        },
-        backgroundColor: Colors.orange,
-        child: const Icon(Icons.pets_rounded, color: Colors.white),
+      floatingActionButton: const Padding(
+        padding: EdgeInsets.only(bottom: 25),
+        child: AnimatedRoccoFab(),
       ),
-      body: SafeArea(child: _pages[_currentIndex]),
+      body: SafeArea(
+        top: false, // El contenido debe llegar hasta arriba bajo el AppBar
+        bottom: false, // Y hasta abajo bajo el Navbar
+        child: _pages[_currentIndex],
+      ),
     );
   }
 }

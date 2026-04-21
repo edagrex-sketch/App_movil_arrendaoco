@@ -3,6 +3,8 @@ import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/view/chats/chat_screen.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -43,16 +45,32 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        title: const Text(
+          'Mensajes',
+          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+        ),
+        centerTitle: true,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: AppGradients.primaryGradient,
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+          ),
+        ),
+        elevation: 0,
+      ),
       body: _isLoading
           ? _buildShimmer()
           : _chats.isEmpty
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _fetchChats,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
                     itemCount: _chats.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1, indent: 80),
                     itemBuilder: (context, index) {
                       final chat = _chats[index];
                       return _buildChatTile(chat);
@@ -69,124 +87,188 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final lastTime = chat['last_message_at'] != null 
         ? DateTime.parse(chat['last_message_at']) 
         : null;
+    
+    // Datos del inmueble
+    final inmueble = chat['inmueble'];
+    final inmuebleNombre = inmueble?['titulo'] ?? 'Propiedad';
+    final inmuebleImg = inmueble?['imagen'];
 
-    return ListTile(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              chatId: chat['id'],
-              otroUsuario: otroUsuario,
-              inmueble: chat['inmueble'],
-            ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        );
-        _fetchChats(); // Refrescar al volver
-      },
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 5,
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  chatId: chat['id'],
+                  otroUsuario: otroUsuario,
+                  inmueble: inmueble,
+                ),
+              ),
+            );
+            _fetchChats(); 
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Avatar del Usuario
+                Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey[100]!, width: 2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.grey[200],
+                        child: ClipOval(
+                          child: ImagenDinamica(
+                            ruta: otroUsuario['foto_perfil'] ?? 
+                                  otroUsuario['avatar'] ?? 
+                                  otroUsuario['foto'] ?? '',
+                            nombre: otroUsuario['nombre'] ?? 'U',
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (chat['activo'] == true)
+                      Positioned(
+                        right: 2,
+                        bottom: 2,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                
+                // Texto y Contexto
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              otroUsuario['nombre'] ?? 'Usuario',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: MiTema.azul,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (lastTime != null)
+                            Text(
+                              _formatTime(lastTime),
+                              style: TextStyle(
+                                color: unreadCount > 0 ? MiTema.celeste : Colors.grey,
+                                fontSize: 11,
+                                fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Etiqueta de la Propiedad (CONTEXTO)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: MiTema.celeste.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.home_work_rounded, size: 10, color: MiTema.celeste),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                inmuebleNombre.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: MiTema.celeste,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              lastMessage,
+                              style: TextStyle(
+                                color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
+                                fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (unreadCount > 0)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: MiTema.celeste,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            child: CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.grey[200],
-              child: ClipOval(
-                child: ImagenDinamica(
-                  ruta: otroUsuario['foto_perfil'] ?? '',
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
           ),
-          if (chat['activo'] == true)
-            Positioned(
-              right: 2,
-              bottom: 2,
-              child: Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-        ],
-      ),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              otroUsuario['nombre'] ?? 'Usuario',
-              style: TextStyle(
-                fontWeight: unreadCount > 0 ? FontWeight.w800 : FontWeight.bold,
-                fontSize: 16,
-                color: MiTema.azul,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (lastTime != null)
-            Text(
-              _formatTime(lastTime),
-              style: TextStyle(
-                color: unreadCount > 0 ? MiTema.celeste : Colors.grey,
-                fontSize: 12,
-                fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-        ],
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                lastMessage,
-                style: TextStyle(
-                  color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
-                  fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 14,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (unreadCount > 0)
-              Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: MiTema.celeste,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  unreadCount > 9 ? '9+' : unreadCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
         ),
       ),
     );

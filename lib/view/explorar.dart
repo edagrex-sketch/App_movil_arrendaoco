@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:arrendaoco/services/pusher_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:easy_debounce/easy_debounce.dart';
@@ -31,27 +32,96 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
     'Local',
   ];
 
+  // Paginación
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 1;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+
   @override
   void initState() {
     super.initState();
     _cargarInmuebles();
+    _scrollController.addListener(_scrollListener);
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    // Escuchar cambios en vivo del catálogo
+    PusherService().init(onMessageReceived: (_) {}, chatId: 'global').then((_) {
+      PusherService().listenToInmuebles(
+        onStatusChanged: (inmuebleId, estatus) {
+          if (mounted) {
+            setState(() {
+              // Si ya no está disponible, lo quitamos de la lista al instante
+              if (estatus != 'disponible') {
+                _inmuebles.removeWhere((i) => i['id'] == inmuebleId);
+              } else {
+                // Si vuelve a estar disponible (ej. cancelación), recargamos para que aparezca
+                _cargarInmuebles();
+              }
+            });
+          }
+        },
+      );
+    });
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= 
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore && !_isLoading) {
+        _cargarMasInmuebles();
+      }
+    }
   }
 
   Future<void> _cargarInmuebles() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _currentPage = 1;
+      _hasMore = true;
+    });
     try {
-      final response = await _api.get('/inmuebles/public-list');
+      final response = await _api.get('/inmuebles/public-list?page=$_currentPage');
       if (response.statusCode == 200) {
-        // En Laravel Resource, los datos vienen en 'data'
         final List<dynamic> data = response.data['data'];
+        final meta = response.data['meta'];
+        
         setState(() {
           _inmuebles = List<Map<String, dynamic>>.from(data);
           _isLoading = false;
+          if (meta != null) {
+            _hasMore = meta['current_page'] < meta['last_page'];
+          }
         });
       }
     } catch (e) {
       debugPrint('Error cargando inmuebles: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _cargarMasInmuebles() async {
+    setState(() => _isLoadingMore = true);
+    try {
+      _currentPage++;
+      final response = await _api.get('/inmuebles/public-list?page=$_currentPage');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data['data'];
+        final meta = response.data['meta'];
+        
+        setState(() {
+          _inmuebles.addAll(List<Map<String, dynamic>>.from(data));
+          _isLoadingMore = false;
+          if (meta != null) {
+            _hasMore = meta['current_page'] < meta['last_page'];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando más inmuebles: $e');
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -206,11 +276,20 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   Widget _buildList() {
     final inmuebles = _aplicarFiltros();
     return ListView.separated(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      itemCount: inmuebles.length,
+      itemCount: inmuebles.length + (_hasMore ? 1 : 0),
       separatorBuilder: (ctx, i) => const SizedBox(height: 20),
       itemBuilder: (context, index) {
+        if (index == inmuebles.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
         final i = inmuebles[index];
         final id = i['id'];
         final titulo = i['titulo'] ?? '';

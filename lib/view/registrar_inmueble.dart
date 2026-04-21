@@ -19,6 +19,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:path/path.dart' as p;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:lottie/lottie.dart';
 
 class RegistrarInmuebleScreen extends StatefulWidget {
   final String propietarioId;
@@ -121,6 +123,141 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
       final val = int.tryParse(_duracionController.text);
       if (val != null) setState(() => _duracionContrato = val);
     });
+
+    // Verificar Stripe Onboarding al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _verificarStatusStripe();
+    });
+  }
+
+  Future<void> _verificarStatusStripe() async {
+    try {
+      final response = await _api.get('/stripe/check-status');
+      if (response.statusCode == 200) {
+        final bool completado = response.data['completed'] ?? false;
+        if (!completado) {
+          _mostrarModalStripe();
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error verificando Stripe: $e');
+    }
+  }
+
+  void _mostrarModalStripe() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Lottie.network(
+                  'https://assets4.lottiefiles.com/packages/lf20_syqnfe7c.json',
+                  height: 180,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '¡Casi puedes cobrar! 💸',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: MiTema.azul,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Para publicar tu propiedad y recibir rentas automáticamente, necesitamos que vincules una cuenta bancaria con Stripe.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+                const SizedBox(height: 30),
+                StunningButton(
+                  text: 'Vincular Cuenta Ahora',
+                  icon: Icons.account_balance_wallet_rounded,
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    _iniciarOnboardingStripe();
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Regresar', style: TextStyle(color: Colors.grey[500])),
+                ),
+              ],
+            ),
+          ),
+        ).animate().fadeIn().scale(begin: const Offset(0.9, 0.9)),
+      ),
+    );
+  }
+
+  Future<void> _iniciarOnboardingStripe() async {
+    LottieLoading.showLoadingDialog(context, message: 'Generando enlace seguro...');
+    try {
+      final response = await _api.get('/stripe/onboarding-link');
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+
+      if (response.statusCode == 200) {
+        final String? url = response.data['url'];
+        if (url != null && url.isNotEmpty) {
+          final uri = Uri.parse(url);
+          try {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            _mostrarModalVerificacionStripe();
+          } catch (e) {
+            if (mounted) LottieFeedback.showError(context, message: 'No se pudo abrir el navegador: $e');
+          }
+        } else {
+          if (mounted) LottieFeedback.showError(context, message: 'El servidor no devolvió una URL válida');
+        }
+      } else {
+        if (mounted) LottieFeedback.showError(context, message: 'Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+      LottieFeedback.showError(context, message: 'No se pudo generar el enlace de Stripe');
+    }
+  }
+
+  void _mostrarModalVerificacionStripe() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('¿Completaste el registro?'),
+        content: const Text('Una vez que hayas terminado en Stripe, presiona verificar para continuar.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Aún no'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _verificarStatusStripe();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: MiTema.azul),
+            child: const Text('¡Verificar!', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _actualizarContadorPalabras() {
@@ -140,14 +277,34 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
     _descripcionController.text = data['descripcion'] ?? '';
     _precioController.text = data['renta_mensual']?.toString() ?? '';
     _depositoController.text = data['deposito']?.toString() ?? '';
-    _direccionController.text = data['direccion'] ?? 'Ocosingo, Chiapas';
-    _categoriaSeleccionada = data['tipo'];
+    _direccionController.text = data['direccion'] ?? '';
+    _categoriaSeleccionada = data['tipo'] ?? 'Casa';
     _camas = (data['habitaciones'] as num?)?.toInt() ?? 1;
     _banos = (data['banos'] as num?)?.toInt() ?? 1;
-    _requiereDeposito = data['requiere_deposito'] == 1;
+    _requiereDeposito = data['requiere_deposito'] == 1 || (double.tryParse(data['deposito']?.toString() ?? '0') ?? 0) > 0;
+    
+    // Reglas y Pagos
     _mobiliario = data['estado_mobiliario'] ?? 'No amueblado';
-    _clabeController.text = data['clabe_interbancaria'] ?? '';
-    _bancoSeleccionado = data['banco'];
+    _momentoPago = data['momento_pago'] ?? 'Por adelantado';
+    _toleranciaController.text = data['dias_tolerancia']?.toString() ?? '2';
+    _preavisoController.text = data['dias_preaviso']?.toString() ?? '30';
+    _duracionController.text = data['duracion_contrato_meses']?.toString() ?? '12';
+    _permiteMascotas = data['permite_mascotas'] == 1 || data['permite_mascotas'] == true;
+    _incluirClausulas = data['incluir_clausulas'] == 1 || data['incluir_clausulas'] == true;
+    _clausulasController.text = data['clausulas_extra'] ?? '';
+
+    if (data['tipos_mascotas'] is List) {
+      _tiposMascotasPermitidas = List<String>.from(data['tipos_mascotas']);
+    }
+    if (data['servicios_incluidos'] is List) {
+      _serviciosSeleccionados = List<String>.from(data['servicios_incluidos']);
+    }
+    if (data['pago_servicio'] is Map) {
+      _pagoServiciosResponsables = Map<String, String>.from(data['pago_servicio']);
+    }
+
+    _largoController.text = data['largo']?.toString() ?? '';
+    _anchoController.text = data['ancho']?.toString() ?? '';
     
     // Lat/Lng
     if (data['latitud'] != null && data['longitud'] != null) {
@@ -166,14 +323,38 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
     try {
       final pos = await obtenerUbicacionActual();
       if (!mounted) return;
+      
+      // Intentar Reverse Geocoding para llenar el campo de texto
+      final dioClient = dio.Dio();
+      final res = await dioClient.get(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'format': 'json',
+          'lat': pos.latitude,
+          'lon': pos.longitude,
+          'zoom': 18,
+          'addressdetails': 1,
+        },
+        options: dio.Options(headers: {'User-Agent': 'ArrendaOco/1.0'})
+      );
+
+      if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
+
       setState(() {
         _ubicacionActual = pos;
+        if (res.data != null && res.data['display_name'] != null) {
+          _direccionController.text = res.data['display_name'].toString();
+        }
       });
+      
+      LottieFeedback.showSuccess(context, message: 'Ubicación detectada y dirección escrita');
+
     } catch (e) {
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
-      LottieFeedback.showError(context, message: 'No se pudo obtener la ubicación');
+      // Al menos guardamos la posición aunque falle el texto
+      LottieFeedback.showError(context, message: 'Ubicación obtenida, por favor escribe la dirección manualmente');
     }
   }
 
@@ -377,11 +558,30 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         LottieFeedback.showSuccess(context, message: '¡Propiedad publicada!', onComplete: () => Navigator.pop(context, true));
+      } else {
+        String msg = 'Estatus ${response.statusCode}: ';
+        if (response.data is Map && response.data['message'] != null) {
+          msg += response.data['message'].toString();
+        } else if (response.data is Map && response.data['errors'] != null) {
+          msg += 'Error en datos: ${response.data['errors'].toString()}';
+        }
+        LottieFeedback.showError(context, message: msg);
       }
+    } on dio.DioException catch (de) {
+      if (!mounted) return;
+      LottieLoading.hideLoadingDialog(context);
+      String errStr = 'Error del Servidor: ';
+      if (de.response?.data is Map) {
+         final data = de.response!.data as Map;
+         errStr += data['message'] ?? data['errors']?.toString() ?? de.message;
+      } else {
+         errStr += de.message ?? 'Error desconocido';
+      }
+      LottieFeedback.showError(context, message: errStr);
     } catch (e) {
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);
-      LottieFeedback.showError(context, message: 'Error al conectar con el servidor');
+      LottieFeedback.showError(context, message: 'Error inesperado: $e');
     }
   }
 
@@ -498,7 +698,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
               controller: _tituloController,
               label: 'Nombre del Anuncio *',
               icon: Icons.edit_note_rounded,
-              validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'El nombre del anuncio es obligatorio' : null,
             ),
             const SizedBox(height: 20),
             Row(
@@ -519,6 +719,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                     label: 'Renta Mensual *',
                     icon: Icons.monetization_on_rounded,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                   ),
                 ),
@@ -546,6 +747,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                       label: 'Monto del Depósito *',
                       icon: Icons.security_rounded,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       validator: (v) => _requiereDeposito && v!.isEmpty ? 'Campo requerido' : null,
                     ).animate().fadeIn().slideY(begin: 0.1),
                   ],
@@ -575,6 +777,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                     controller: _direccionController,
                     label: 'Dirección Completa *',
                     icon: Icons.location_on_rounded,
+                    validator: (v) => v!.isEmpty ? 'La dirección es obligatoria' : null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -703,15 +906,15 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: _palabrasDescripcion >= 30 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    color: _palabrasDescripcion >= 20 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '$_palabrasDescripcion / 120 palabras (Mín. 30)',
+                    '$_palabrasDescripcion / 120 palabras (Mín. 20)',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: _palabrasDescripcion >= 30 ? Colors.green : Colors.red,
+                      color: _palabrasDescripcion >= 20 ? Colors.green : Colors.red,
                     ),
                   ),
                 ),
@@ -727,7 +930,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                 FilteringTextInputFormatter.allow(RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ ]')),
               ],
               validator: (v) {
-                if (_palabrasDescripcion < 30) return 'Se requieren al menos 30 palabras';
+                if (v == null || v.trim().isEmpty || _palabrasDescripcion < 20) return 'Se requieren al menos 20 palabras significativas';
                 if (_palabrasDescripcion > 120) return 'Máximo 120 palabras';
                 return null;
               },
@@ -822,41 +1025,13 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: StunningTextField(
-                    controller: _preavisoController, 
-                    label: 'Preaviso Salida (Días)', 
-                    icon: Icons.notification_important_rounded,
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: StunningTextField(
-                    controller: _clabeController, 
-                    label: 'CLABE *', 
-                    icon: Icons.account_balance_rounded,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(18),
-                    ],
-                  ),
-                ),
-              ],
+            StunningTextField(
+              controller: _preavisoController, 
+              label: 'Preaviso Salida (Días) *', 
+              icon: Icons.notification_important_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
-            const SizedBox(height: 20),
-            StunningDropdown<String>(
-              value: _bancoSeleccionado,
-              label: 'Banco Receptor de Pagos',
-              icon: Icons.account_balance_wallet_rounded,
-              items: _bancos.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) => setState(() => _bancoSeleccionado = v),
-            ),
-            const SizedBox(height: 30),
             _buildDurationSelector(),
             const SizedBox(height: 30),
             StunningCard(
@@ -1183,10 +1358,15 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
               onPressed: _nextStep,
               style: ElevatedButton.styleFrom(
                 backgroundColor: MiTema.azul,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
               ),
-              child: Text(_currentStep == 3 ? '¡Publicar Ahora!' : 'Siguiente Paso →'),
+              child: Text(
+                _currentStep == 3 ? '¡PUBLICAR AHORA!' : 'SIGUIENTE',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.1),
+              ),
             ),
           ),
         ],
@@ -1196,7 +1376,7 @@ class _RegistrarInmuebleScreenState extends State<RegistrarInmuebleScreen>
 
   Future<void> seleccionarImagenes() async {
     final picker = ImagePicker();
-    final images = await picker.pickMultiImage();
+    final images = await picker.pickMultiImage(imageQuality: 70, maxWidth: 1920);
     if (images.isNotEmpty) setState(() => _imagenesSeleccionadas = images);
   }
 }

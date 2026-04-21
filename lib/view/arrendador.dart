@@ -4,6 +4,7 @@ import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/view/registrar_inmueble.dart';
 import 'package:arrendaoco/view/explorar.dart';
 import 'package:arrendaoco/view/perfil.dart';
+import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
@@ -13,6 +14,9 @@ import 'package:arrendaoco/view/widgets/notification_badge.dart';
 import 'package:arrendaoco/utils/casting.dart';
 import 'package:arrendaoco/view/chats/chat_list_screen.dart';
 import 'package:arrendaoco/view/roco_chat.dart';
+import 'package:arrendaoco/view/solicitudes_renta_screen.dart';
+import 'package:arrendaoco/widgets/premium_navbar.dart';
+import 'package:arrendaoco/widgets/animated_rocco_fab.dart';
 
 
 class ArrendadorScreen extends StatefulWidget {
@@ -42,7 +46,7 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
     final pages = [
       InicioFeed(key: _feedKey, usuarioId: widget.usuarioId),
       const ExplorarScreen(),
-      const ChatListScreen(), 
+      MisRentasScreen(), 
       const PerfilScreen(),
     ];
 
@@ -80,8 +84,10 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
           NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 25),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
         children: [
           currentIndex == 0
             ? Container(
@@ -127,71 +133,35 @@ class ArrendadorScreenState extends State<ArrendadorScreen> {
               )
             : const SizedBox.shrink(),
           const SizedBox(height: 12),
-          FloatingActionButton(
-            heroTag: 'rocoBtn',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => RocoChatScreen()),
-
-              );
-            },
-            backgroundColor: Colors.orange,
-            child: const Icon(Icons.pets_rounded, color: Colors.white),
-          ),
+          const AnimatedRoccoFab(),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          backgroundColor: Colors.transparent,
-          indicatorColor: ArrendaColors.accent.withOpacity(0.15),
-          selectedIndex: currentIndex,
-          onDestinationSelected: (i) => setState(() => currentIndex = i),
-          destinations: [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.home_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Mis Propiedades',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.search_outlined, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.search_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Explorar',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline_rounded, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.chat_bubble_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Mensajes',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline, color: Colors.grey[600]),
-              selectedIcon: Icon(
-                Icons.person_rounded,
-                color: ArrendaColors.primary,
-              ),
-              label: 'Perfil',
-            ),
-          ],
-        ),
+    ),
+    bottomNavigationBar: PremiumFloatingNavBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (i) => setState(() => currentIndex = i),
+        items: const [
+          StunningNavItem(
+            icon: Icons.home_outlined, 
+            selectedIcon: Icons.home_rounded, 
+            label: 'Inicio',
+          ),
+          StunningNavItem(
+            icon: Icons.search_outlined, 
+            selectedIcon: Icons.search_rounded, 
+            label: 'Explorar',
+          ),
+          StunningNavItem(
+            icon: Icons.receipt_long_outlined, 
+            selectedIcon: Icons.receipt_long_rounded, 
+            label: 'Mis Rentas',
+          ),
+          StunningNavItem(
+            icon: Icons.person_outline, 
+            selectedIcon: Icons.person_rounded, 
+            label: 'Perfil',
+          ),
+        ],
       ),
       body: SafeArea(child: pages[currentIndex]),
     );
@@ -210,6 +180,7 @@ class InicioFeed extends StatefulWidget {
 class InicioFeedState extends State<InicioFeed> {
   final ApiService _api = ApiService();
   List<Map<String, dynamic>> _inmuebles = [];
+  List<Map<String, dynamic>> _solicitudesPendientes = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -228,9 +199,22 @@ class InicioFeedState extends State<InicioFeed> {
       final response = await _api.get('/inmuebles');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data['data'] ?? [];
+
+        // Cargar solicitudes pendientes solo para este arrendador
+        final responseSols = await _api.get('/contratos');
+        List<Map<String, dynamic>> sols = [];
+        if (responseSols.statusCode == 200) {
+           final List<dynamic> dataSols = responseSols.data['data'] ?? [];
+           sols = List<Map<String, dynamic>>.from(dataSols).where((c) => 
+              c['estado'] == 'pendiente_aprobacion' && 
+              c['propietario_id'].toString() == widget.usuarioId.toString()
+           ).toList();
+        }
+
         if (mounted) {
           setState(() {
             _inmuebles = List<Map<String, dynamic>>.from(data);
+            _solicitudesPendientes = sols;
             _isLoading = false;
           });
         }
@@ -291,7 +275,7 @@ class InicioFeedState extends State<InicioFeed> {
       );
     }
 
-    if (_inmuebles.isEmpty) {
+    if (_inmuebles.isEmpty && _solicitudesPendientes.isEmpty) {
       return RefreshIndicator(
         onRefresh: cargarInmuebles,
         child: ListView(
@@ -318,14 +302,20 @@ class InicioFeedState extends State<InicioFeed> {
       onRefresh: cargarInmuebles,
       child: ListView.separated(
         padding: const EdgeInsets.all(20),
-        itemCount: _inmuebles.length,
+        itemCount: _inmuebles.length + (_solicitudesPendientes.isNotEmpty ? 1 : 0),
         separatorBuilder: (context, index) => const SizedBox(height: 20),
         itemBuilder: (context, index) {
-          final i = _inmuebles[index];
+          if (_solicitudesPendientes.isNotEmpty && index == 0) {
+            return _buildAvisoReserva();
+          }
+
+          final iIdx = _solicitudesPendientes.isNotEmpty ? index - 1 : index;
+          final i = _inmuebles[iIdx];
           final titulo = i['titulo'] ?? '';
           final descripcion = i['descripcion'] ?? '';
           final precio = Parser.toDouble(i['renta_mensual']);
-          final categoria = i['tipo'] ?? '';
+          
+          final estatusBadge = (i['estatus'] ?? i['estado'] ?? 'DISPONIBLE').toString().toUpperCase();
           final primeraRuta = i['imagen_portada'];
 
           return StunningCard(
@@ -375,7 +365,7 @@ class InicioFeedState extends State<InicioFeed> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          categoria.toString(),
+                          estatusBadge,
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -526,6 +516,41 @@ class InicioFeedState extends State<InicioFeed> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildAvisoReserva() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notification_important_rounded, color: Colors.white, size: 30),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('¡Tienes ${_solicitudesPendientes.length} solicitudes!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Inquilinos esperando tu aprobación.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => const SolicitudesRentaScreen()));
+              cargarInmuebles();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.2), foregroundColor: Colors.white, elevation: 0),
+            child: const Text('GESTIONAR'),
+          ),
+        ],
       ),
     );
   }

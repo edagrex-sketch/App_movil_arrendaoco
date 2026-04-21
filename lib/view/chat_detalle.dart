@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/services/firebase_chat_service.dart';
+import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
@@ -28,6 +29,7 @@ class ChatDetalleScreen extends StatefulWidget {
 class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   final TextEditingController _msgController = TextEditingController();
   final FirebaseChatService _chatService = FirebaseChatService();
+  final ApiService _apiService = ApiService();
   final ScrollController _scrollController = ScrollController();
   late String _chatId;
 
@@ -40,18 +42,26 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     );
   }
 
-  void _enviarMensaje() {
+  Future<void> _enviarMensaje() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
 
     _msgController.clear();
-    _chatService.sendMessage(
-      chatId: _chatId,
-      senderId: SesionActual.usuarioId ?? '',
-      receiverId: widget.otroUsuarioId,
-      text: text,
-      inmuebleId: widget.inmuebleId,
-    );
+    
+    // Ahora enviamos a través de Laravel API para que se guarde en MySQL y se sincronice con Firebase
+    try {
+      await _apiService.post(
+        '/chats/enviar-a-usuario/${widget.otroUsuarioId}',
+        data: {
+          'contenido': text,
+          'tipo': 'texto',
+        },
+      );
+      debugPrint('✅ Mensaje enviado vía API y sincronizado');
+    } catch (e) {
+      debugPrint('❌ Error enviando mensaje vía API: $e');
+      // Opcional: Podrías intentar enviarlo directo a Firebase si el servidor falla
+    }
     
     // Scroll al final
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -115,7 +125,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
           // Área de mensajes
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _chatService.getMessagesStream(_chatId),
+              stream: _chatService.getRawMessagesStream(_chatId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

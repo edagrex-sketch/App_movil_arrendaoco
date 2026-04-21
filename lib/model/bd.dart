@@ -177,8 +177,10 @@ class BaseDatos {
           if (inmuebleId != null) 'inmueble_id': inmuebleId,
         },
       );
-      return response.data['reply'] ??
-          'Lo siento, no pude procesar tu mensaje.';
+      // Backend returns 'response' in JSON, but some parts used 'reply'
+      return response.data['response'] ?? 
+             response.data['reply'] ??
+             'Lo siento, no pude procesar tu mensaje.';
     } catch (e) {
       return 'Error de conexión con Roco.';
     }
@@ -303,6 +305,19 @@ class BaseDatos {
     }
   }
 
+  static Future<bool> subirContratoFirmado(int id, String filePath) async {
+    try {
+      final formData = FormData.fromMap({
+        'archivo': await MultipartFile.fromFile(filePath),
+      });
+      final response = await _api.post('/contratos/$id/subir-firmado', data: formData);
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Error subiendo contrato: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, dynamic>?> obtenerRentaPorId(int id) async {
     try {
       final response = await _api.get('/contratos/$id');
@@ -324,9 +339,7 @@ class BaseDatos {
     try {
       final response = await _api.get('/contratos');
       final List data = response.data['data'] ?? [];
-      return List<Map<String, dynamic>>.from(
-        data,
-      ).where((r) => r['arrendador_id'].toString() == arrendadorId.toString()).toList();
+      return List<Map<String, dynamic>>.from(data);
     } catch (e) {
       return [];
     }
@@ -338,9 +351,7 @@ class BaseDatos {
     try {
       final response = await _api.get('/contratos');
       final List data = response.data['data'] ?? [];
-      return List<Map<String, dynamic>>.from(
-        data,
-      ).where((r) => r['inquilino_id'].toString() == inquilinoId.toString()).toList();
+      return List<Map<String, dynamic>>.from(data);
     } catch (e) {
       return [];
     }

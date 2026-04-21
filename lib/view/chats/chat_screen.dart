@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/services/api_service.dart';
-import 'package:arrendaoco/services/pusher_service.dart';
-import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
-import 'package:arrendaoco/widgets/lottie_loading.dart'; // No se usa pero tal vez se use luego
-import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
-import 'package:arrendaoco/view/roco_chat.dart';
+import 'package:arrendaoco/services/firebase_chat_service.dart';
+import 'dart:async';
 import 'package:intl/intl.dart';
+import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class ChatScreen extends StatefulWidget {
   final int chatId;
@@ -26,45 +27,80 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final ApiService _api = ApiService();
-  final PusherService _pusher = PusherService();
+  final FirebaseChatService _fbChat = FirebaseChatService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
-  Map<String, dynamic>? _replyMessage;
+  Map<String, dynamic>? _replyMessage; // Mensaje al que estamos respondiendo
+  Map<String, dynamic>? _fullInmueble;
+  StreamSubscription? _chatSubscription;
 
   @override
   void initState() {
     super.initState();
+    _fullInmueble = widget.inmueble;
     _fetchMessages();
-    _setupPusher();
+    _fetchPropertyDetails();
+    _setupFirebase();
+  }
+
+  Future<void> _fetchPropertyDetails() async {
+    if (widget.inmueble == null) return;
+    
+    // Si ya tenemos precio y foto, no hace falta buscar (optimización)
+    if (_fullInmueble != null && 
+        (_fullInmueble!['renta_mensual'] != null || _fullInmueble!['precio'] != null) &&
+        (_fullInmueble!['imagen_portada'] != null || _fullInmueble!['imagenes_nombres'] != null)) {
+      return;
+    }
+
+    try {
+      final id = widget.inmueble!['id'];
+      final response = await ApiService().get('/inmuebles/$id');
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            _fullInmueble = response.data['data'];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error trayendo detalles extra del inmueble: $e');
+    }
   }
 
   @override
   void dispose() {
-    _pusher.disconnect(widget.chatId.toString());
+    _chatSubscription?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _setupPusher() async {
-    await _pusher.init(
-      chatId: widget.chatId.toString(),
-      onMessageReceived: (msg) {
-        if (mounted) {
-          setState(() {
-            // Evitar duplicados si nosotros mismos enviamos el mensaje
-            if (!_messages.any((m) => m['id'] == msg['id'])) {
-              _messages.add(msg);
-              _scrollToBottom();
+  void _setupFirebase() {
+    _chatSubscription = _fbChat.getMessagesStream(widget.chatId.toString()).listen((fbMessages) {
+      if (mounted) {
+        setState(() {
+          for (var fbMsg in fbMessages) {
+            final index = _messages.indexWhere((m) => m['id'].toString() == fbMsg['id'].toString());
+            if (index == -1) {
+              _messages.add(fbMsg);
+            } else {
+              _messages[index] = fbMsg;
             }
+          }
+          _messages.sort((a,b) {
+             final da = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+             final db = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+             return da.compareTo(db);
           });
-        }
-      },
-    );
+        });
+        _scrollToBottom();
+      }
+    });
   }
 
   Future<void> _fetchMessages() async {
@@ -78,20 +114,32 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom();
       }
     } catch (e) {
-      debugPrint('Error fetching messages: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
+    if (_scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
-      }
+      });
+    }
+  }
+
+  void _onReplyMessage(Map<String, dynamic> message) {
+    setState(() {
+      _replyMessage = message;
+    });
+    // Podríamos enfocar el teclado aquí si quisiéramos
+  }
+
+  void _cancelReply() {
+    setState(() {
+      _replyMessage = null;
     });
   }
 
@@ -99,11 +147,30 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = content ?? _messageController.text.trim();
     if (text.isEmpty && type == null) return;
 
-    setState(() => _isSending = true);
-    if (content == null) _messageController.clear();
-    
     final parentId = _replyMessage?['id'];
-    setState(() => _replyMessage = null);
+    final parentData = _replyMessage != null ? {
+      'contenido': _replyMessage!['contenido'],
+      'sender_nombre': _replyMessage!['sender_nombre'] ?? (int.tryParse(_replyMessage!['sender_id'].toString()) == int.tryParse(SesionActual.usuarioId ?? '0') ? 'Tú' : (widget.otroUsuario['nombre'] ?? 'Usuario')),
+    } : null;
+
+    final tempId = "temp_${DateTime.now().millisecondsSinceEpoch}";
+    final localMsg = {
+      'id': tempId,
+      'contenido': text,
+      'tipo': type ?? 'texto',
+      'sender_id': int.tryParse(SesionActual.usuarioId ?? '0'),
+      'created_at': DateTime.now().toString(),
+      'is_temp': true,
+      'parent': parentData, // Añadimos info del padre para el optimista
+    };
+
+    setState(() {
+      _messages.add(localMsg);
+      _isSending = true;
+      _replyMessage = null; // Limpiar respuesta al enviar
+    });
+    if (content == null) _messageController.clear();
+    _scrollToBottom();
 
     try {
       final response = await _api.post(
@@ -116,426 +183,212 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode != null && response.statusCode! < 300) {
         final newMessage = response.data['data'];
         setState(() {
-          if (!_messages.any((m) => m['id'] == newMessage['id'])) {
+          _messages.removeWhere((m) => m['id'] == tempId);
+          if (!_messages.any((m) => m['id'].toString() == newMessage['id'].toString())) {
             _messages.add(newMessage);
           }
         });
-        _scrollToBottom();
+        _fbChat.syncLaravelMessage(widget.chatId.toString(), newMessage);
       }
     } catch (e) {
-      debugPrint('Error sending message: $e');
+      _fbChat.syncLaravelMessage(widget.chatId.toString(), localMsg);
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) setState(() => _isSending = false);
+      _scrollToBottom();
     }
-  }
-
-  void _showActionMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Acciones rápidas',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            if (!SesionActual.esPropietario)
-              _buildActionItem(
-                icon: Icons.assignment_turned_in_rounded,
-                title: 'Solicitar Renta',
-                subtitle: 'Envía una solicitud formal para este inmueble',
-                color: MiTema.azul,
-                onTap: () {
-                  Navigator.pop(context);
-                  _sendMessage(
-                    content: '¡Hola! Me encantaría rentar esta propiedad. ¿Podemos iniciar el proceso?',
-                    type: 'oferta',
-                  );
-                },
-              ),
-              _buildActionItem(
-                icon: Icons.description_rounded,
-                title: 'Proponer Acuerdo',
-                subtitle: 'Envía una propuesta de contrato al inquilino',
-                color: Colors.green,
-                onTap: () {
-                  Navigator.pop(context);
-                  _sendMessage(
-                    content: 'He revisado tu perfil y me gustaría proponerte un acuerdo formal de renta.',
-                    type: 'contrato_enviado',
-                  );
-                },
-              ),
-            const Divider(),
-            _buildActionItem(
-              icon: Icons.pets_rounded,
-              title: 'Consultar con Roco',
-              subtitle: 'Pide consejos de leyes o dudas de la propiedad',
-              color: Colors.orange,
-              onTap: () {
-                Navigator.pop(context);
-                _abrirRocoMediador();
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: const Icon(Icons.chevron_right_rounded),
-    );
-  }
-
-  void _abrirRocoMediador() {
-    final lastMessage = _messages.isNotEmpty ? _messages.last['contenido'] : '';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RocoChatScreen(
-          inmuebleId: widget.inmueble?['id'],
-          initialMessage: lastMessage.isNotEmpty 
-            ? 'Roco, en mi chat dijeron esto: "$lastMessage". ¿Qué opinas o qué me sugieres responder legalmente?'
-            : 'Roco, ayúdame como mediador en este chat de renta.',
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
-      appBar: _buildAppBar(),
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        titleSpacing: 0,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          children: [
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: ImagenDinamica(
+                  ruta: widget.otroUsuario['foto_perfil'] ?? 
+                        widget.otroUsuario['avatar'] ?? 
+                        widget.otroUsuario['perfil_foto'] ?? 
+                        widget.otroUsuario['foto'] ?? '',
+                  nombre: widget.otroUsuario['nombre'] ?? 'U',
+                  width: 40,
+                  height: 40,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.otroUsuario['nombre'] ?? 'Usuario',
+                  style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text('En línea', style: TextStyle(color: Colors.green[600], fontSize: 12)),
+              ],
+            ),
+          ],
+        ),
+      ),
       body: Column(
         children: [
-          if (widget.inmueble != null) _buildInmuebleBanner(),
+          _buildPropertyHeader(),
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildMessagesList(),
+            child: _isLoading 
+              ? Center(child: CircularProgressIndicator(color: MiTema.celeste))
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = _messages[index];
+                    final esMio = msg['sender_id'].toString() == SesionActual.usuarioId;
+                    return InkWell(
+                      onLongPress: () => _onReplyMessage(msg),
+                      child: _buildModernMessage(msg, esMio),
+                    );
+                  },
+                ),
           ),
           if (_replyMessage != null) _buildReplyPreview(),
-          _buildInputArea(),
+          _buildPremiumInputArea(),
         ],
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      elevation: 1,
-      backgroundColor: Colors.white,
-      foregroundColor: MiTema.azul,
-      titleSpacing: 0,
-      title: Row(
+  Widget _buildPropertyHeader() {
+    final inmueble = _fullInmueble;
+    if (inmueble == null) return const SizedBox.shrink();
+
+    // Detección AGRESIVA de imagen (Sincronizado con Explorar.dart)
+    String? imagenUrl;
+    final List<String> keysParaImagen = [
+      'imagen_portada', 'imagenes_nombres', 'imagenes', 
+      'imagen', 'foto', 'foto_principal'
+    ];
+    for (var key in keysParaImagen) {
+      final val = inmueble[key];
+      if (val is List && val.isNotEmpty) {
+        imagenUrl = val[0].toString();
+        break;
+      } else if (val is String && val.isNotEmpty) {
+        imagenUrl = val;
+        break;
+      }
+    }
+
+    // Búsqueda AGRESIVA de precio (Sincronizado con Explorar.dart)
+    double precioFinal = 0.0;
+    final List<String> keysParaPrecio = [
+      'renta_mensual', 'precio', 'renta', 'monto', 'valor', 
+      'monto_renta', 'precio_mensual', 'monto_mensual', 
+      'precio_vivienda', 'pago_mensual', 'costo'
+    ];
+    for (var key in keysParaPrecio) {
+      final val = inmueble[key];
+      if (val != null) {
+        final parsed = double.tryParse(val.toString());
+        if (parsed != null && parsed > 0) {
+          precioFinal = parsed;
+          break;
+        }
+      }
+    }
+
+    final String precioFormateado = NumberFormat.currency(
+      symbol: '\$',
+      decimalDigits: 0,
+    ).format(precioFinal);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.grey[200],
-            child: ClipOval(
-              child: ImagenDinamica(
-                ruta: widget.otroUsuario['foto_perfil'] ?? '',
-                width: 36,
-                height: 36,
-                fit: BoxFit.cover,
-              ),
+          Container(
+            width: 55,
+            height: 55,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey[100],
+            ),
+            child: ImagenDinamica(
+              ruta: imagenUrl ?? '',
+              borderRadius: BorderRadius.circular(12),
+              fit: BoxFit.cover,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.otroUsuario['nombre'] ?? 'Usuario',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  inmueble['titulo']?.toString() ?? 'Sin título',
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1A1A)),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  'En línea',
-                  style: TextStyle(fontSize: 11, color: Colors.green[600], fontWeight: FontWeight.w600),
+                  precioFinal > 0 ? '$precioFormateado / mes' : 'Cargando precio...',
+                  style: TextStyle(
+                    color: MiTema.celeste, 
+                    fontSize: 14, 
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-      actions: [
-        IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () {}),
-      ],
-    );
-  }
-
-  Widget _buildInmuebleBanner() {
-    return InkWell(
-      onTap: () {
-        if (widget.inmueble != null) {
-          Navigator.pushNamed(context, '/detalle-inmueble', arguments: widget.inmueble);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        color: MiTema.azul.withOpacity(0.05),
-        child: Row(
-          children: [
-            Hero(
-              tag: 'prop_img_${widget.inmueble?['id']}',
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: ImagenDinamica(
-                  ruta: widget.inmueble?['imagen'] ?? '',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Interés por:',
-                    style: TextStyle(fontSize: 10, color: Colors.grey[600], fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    widget.inmueble?['titulo'] ?? '',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: MiTema.azul),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMessagesList() {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final message = _messages[index];
-        final isMe = message['sender_id'].toString() == SesionActual.usuarioId.toString();
-        
-        return _buildMessageBubble(message, isMe);
-      },
-    );
-  }
-
-  Widget _buildMessageBubble(dynamic msg, bool isMe) {
-    final type = msg['tipo'];
-    final time = DateTime.parse(msg['created_at']);
-    final parent = msg['parent'];
-
-    return GestureDetector(
-      onDoubleTap: () {
-        setState(() => _replyMessage = msg);
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            if (parent != null)
-              _buildParentRef(parent, isMe),
-            
-            if (type == 'oferta' || type == 'contrato_enviado')
-              _buildActionCard(msg, isMe)
-            else
-              _buildTextBubble(msg['contenido'], isMe),
-            
-            Padding(
-              padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    DateFormat('HH:mm').format(time),
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                  ),
-                  if (isMe) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      msg['leido'] == true ? Icons.done_all_rounded : Icons.check_rounded,
-                      size: 14,
-                      color: msg['leido'] == true ? MiTema.celeste : Colors.grey,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildParentRef(dynamic parent, bool isMe) {
-    return Container(
-      margin: EdgeInsets.only(
-        left: isMe ? 40 : 0, 
-        right: isMe ? 0 : 40,
-        bottom: -10
-      ),
-      padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 18),
-      decoration: BoxDecoration(
-        color: Colors.grey[300]!.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            parent['sender_nombre'] ?? 'Usuario',
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            parent['contenido'] ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextBubble(String content, bool isMe) {
-    return Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isMe ? MiTema.azul : Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(20),
-          topRight: const Radius.circular(20),
-          bottomLeft: Radius.circular(isMe ? 20 : 4),
-          bottomRight: Radius.circular(isMe ? 4 : 20),
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Text(
-        content,
-        style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 14.5),
-      ),
-    );
-  }
-
-  Widget _buildActionCard(dynamic msg, bool isMe) {
-    final isOferta = msg['tipo'] == 'oferta';
-    final color = isOferta ? Colors.blue[800]! : Colors.green[700]!;
-
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isMe ? MiTema.azul : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(isOferta ? Icons.star_rounded : Icons.file_copy_rounded, color: isMe ? Colors.white : color, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                isOferta ? 'SOLICITUD DE RENTA' : 'PROPUESTA DE CONTRATO',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isMe ? Colors.white : color, letterSpacing: 0.5),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            msg['contenido'],
-            style: TextStyle(
-              fontSize: 13, 
-              fontStyle: FontStyle.italic,
-              color: isMe ? Colors.white.withOpacity(0.9) : Colors.black87
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (!isMe)
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: color,
-                elevation: 0,
-                minimumSize: const Size(double.infinity, 36),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(isOferta ? 'VER PERFIL' : 'REVISAR CONTRATO', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
+          // Quitamos el REF y ponemos un icono de estado o simplemente dejamos el espacio
+          Icon(Icons.chevron_right_rounded, color: Colors.grey[300]),
         ],
       ),
     );
   }
 
   Widget _buildReplyPreview() {
+    final bool esMio = _replyMessage!['sender_id'].toString() == SesionActual.usuarioId;
     return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.black12, width: 0.5)),
+        border: Border(top: BorderSide(color: Colors.grey[200]!)),
       ),
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
-          border: Border(left: BorderSide(color: MiTema.azul, width: 4)),
+          border: Border(left: BorderSide(color: MiTema.celeste, width: 4)),
         ),
         child: Row(
           children: [
@@ -545,72 +398,169 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Respondiendo a ${_replyMessage!['sender']?['nombre'] ?? 'Usuario'}',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: MiTema.azul),
+                    esMio ? 'Tú' : (widget.otroUsuario['nombre'] ?? 'Usuario'),
+                    style: TextStyle(color: MiTema.celeste, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
-                  Text(_replyMessage!['contenido'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 2),
+                  Text(
+                    _replyMessage!['contenido'] ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, size: 18), 
-              onPressed: () => setState(() => _replyMessage = null)
+              icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+              onPressed: _cancelReply,
             ),
           ],
         ),
+      ),
+    ).animate().slideY(begin: 1, curve: Curves.easeOutCubic).fadeIn();
+  }
+
+  Widget _buildModernMessage(Map<String, dynamic> msg, bool esMio) {
+    final String time = _formatTime(msg['created_at']);
+    final parent = msg['parent'];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: esMio ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: esMio ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!esMio) ...[
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: ImagenDinamica(
+                      ruta: widget.otroUsuario['foto_perfil'] ?? 
+                            widget.otroUsuario['avatar'] ?? 
+                            widget.otroUsuario['perfil_foto'] ?? 
+                            widget.otroUsuario['foto'] ?? '',
+                      nombre: widget.otroUsuario['nombre'] ?? 'U',
+                      width: 24,
+                      height: 24,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.all(4), // Para espacio del parent
+                  decoration: BoxDecoration(
+                    gradient: esMio ? LinearGradient(colors: [MiTema.celeste, MiTema.azul], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+                    color: esMio ? null : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(esMio ? 20 : 0),
+                      bottomRight: Radius.circular(esMio ? 0 : 20),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (parent != null) _buildMessageParent(parent, esMio),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Text(
+                          msg['contenido'] ?? '',
+                          style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 15),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ).animate().fadeIn().slideX(begin: esMio ? 0.1 : -0.1),
+          Padding(
+            padding: EdgeInsets.only(top: 4, left: esMio ? 0 : 36, right: esMio ? 8 : 0),
+            child: Text(time, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildMessageParent(dynamic parent, bool esMio) {
     return Container(
-      padding: EdgeInsets.only(
-        left: 16, 
-        right: 16, 
-        top: 10, 
-        bottom: 10 + MediaQuery.of(context).viewInsets.bottom
+      margin: const EdgeInsets.all(4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: esMio ? Colors.white.withOpacity(0.15) : Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: esMio ? Colors.white : MiTema.celeste, width: 3)),
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: _showActionMenu,
-              icon: Icon(Icons.add_circle_outline_rounded, color: MiTema.azul),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            parent['sender_nombre'] ?? 'Usuario',
+            style: TextStyle(
+              color: esMio ? Colors.white : MiTema.celeste,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
             ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Escribe un mensaje...',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(fontSize: 14),
-                  ),
-                ),
+          ),
+          Text(
+            parent['contenido'] ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: esMio ? Colors.white70 : Colors.grey[600], fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(dynamic dateStr) {
+    try {
+      final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+      return DateFormat('hh:mm a').format(date);
+    } catch (e) { return ''; }
+  }
+
+  Widget _buildPremiumInputArea() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Row(
+        children: [
+          IconButton(icon: Icon(Icons.add_circle_outline_rounded, color: MiTema.celeste), onPressed: () {}),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(25)),
+              child: TextField(
+                controller: _messageController,
+                decoration: const InputDecoration(hintText: 'Escribe un mensaje...', border: InputBorder.none),
+                onSubmitted: (_) => _sendMessage(),
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(color: MiTema.azul, shape: BoxShape.circle),
-              child: IconButton(
-                onPressed: _isSending ? null : () => _sendMessage(),
-                icon: _isSending 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.send_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _sendMessage,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [MiTema.celeste, MiTema.azul], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                shape: BoxShape.circle,
               ),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

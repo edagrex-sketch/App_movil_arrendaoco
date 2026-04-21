@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.arrendaoco.app"
+    namespace = "com.example.arrendaoco"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.arrendaoco.app"
+        applicationId = "com.example.arrendaoco"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -56,6 +56,7 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
 
 configurations.all {
     resolutionStrategy {

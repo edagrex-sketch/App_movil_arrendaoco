@@ -100,6 +100,7 @@ class AuthService {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
+        serverClientId: '32992727938-rreabr4tphbidr2gl683mom4ra8qpunv.apps.googleusercontent.com',
       );
 
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -158,8 +159,16 @@ class AuthService {
     try {
       final response = await _api.get('/me');
       if (response.statusCode == 200) {
-        // /me devuelve UserResource directamente (no anidado en 'data')
-        final userData = response.data is Map ? response.data : null;
+        // Laravel Resources suelen envolver en 'data'
+        Map<String, dynamic>? userData;
+        if (response.data is Map) {
+          if (response.data.containsKey('data')) {
+            userData = Map<String, dynamic>.from(response.data['data']);
+          } else {
+            userData = Map<String, dynamic>.from(response.data);
+          }
+        }
+
         if (userData == null) return null;
 
         final rolesList =
@@ -167,9 +176,11 @@ class AuthService {
                 ?.map((e) => e.toString())
                 .toList() ??
             [];
+        
         String userRole = 'inquilino';
         if (rolesList.isNotEmpty) {
           final lowerRoles = rolesList.map((r) => r.toLowerCase()).toList();
+          // Priorizar rol Propietario si existe
           if (lowerRoles.contains('propietario') ||
               lowerRoles.contains('arrendador') ||
               lowerRoles.contains('admin') ||
@@ -180,6 +191,7 @@ class AuthService {
                   r == 'arrendador' ||
                   r == 'admin' ||
                   r == 'administrador',
+              orElse: () => 'inquilino'
             );
           } else {
             userRole = lowerRoles[0];
@@ -188,8 +200,8 @@ class AuthService {
 
         return {
           'id': userData['id'].toString(),
-          'nombre': userData['nombre'],
-          'email': userData['email'],
+          'nombre': userData['nombre'] ?? '',
+          'email': userData['email'] ?? '',
           'foto_perfil': userData['foto_perfil'],
           'rol': userRole,
           'roles': rolesList,

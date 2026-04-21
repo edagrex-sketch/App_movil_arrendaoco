@@ -10,6 +10,7 @@ import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Map inmueble;
@@ -39,7 +40,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> _confirmarReserva() async {
     setState(() => _isLoading = true);
-    LottieLoading.showLoadingDialog(context, message: 'Procesando pago...');
+    LottieLoading.showLoadingDialog(context, message: 'Preparando pago seguro...');
 
     try {
       final response = await _api.post(
@@ -55,21 +56,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       if (mounted) {
         LottieLoading.hideLoadingDialog(context);
+        
         if (response.statusCode == 201 || response.statusCode == 200) {
-          await LottieFeedback.showSuccess(
-            context,
-            message: '¡Inmueble rentado con éxito!',
-          );
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
+          final data = response.data;
+          final String? stripeUrl = data['stripe_url'];
+
+          if (stripeUrl != null && stripeUrl.isNotEmpty) {
+            // Abrir pasarela de Stripe
+            final uri = Uri.parse(stripeUrl);
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+              
+              // Mostrar feedback de que debe completar el pago
+              if (mounted) {
+                _mostrarModalVerificacionPago(data['contrato_id']);
+              }
+            } else {
+              throw 'No se pudo abrir la pasarela de pago';
+            }
+          } else {
+            // Si por alguna razón no hay URL, procedemos como éxito (aunque no debería pasar)
+            await LottieFeedback.showSuccess(
               context,
-              MaterialPageRoute(
-                builder: (context) => InquilinoHomeScreen(
-                  usuarioId: SesionActual.usuarioId.toString(),
-                ),
-              ),
-              (route) => false,
+              message: '¡Solicitud enviada! El propietario revisará tu renta.',
             );
+            _finalizarCheckout();
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -77,6 +88,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               content: Text(
                 response.data['message'] ?? 'Error al procesar la renta',
               ),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -91,6 +103,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _mostrarModalVerificacionPago(dynamic contratoId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('💡 Paso final'),
+        content: const Text(
+          'Completa el pago en la ventana que se abrió. Una vez terminado, tu solicitud será enviada automáticamente al propietario.',
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => _finalizarCheckout(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: MiTema.azul,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Entendido', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _finalizarCheckout() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => InquilinoHomeScreen(
+          usuarioId: SesionActual.usuarioId.toString(),
+          initialIndex: 1, // Ir directamente a Rentas
+        ),
+      ),
+      (route) => false,
+    );
   }
 
   @override

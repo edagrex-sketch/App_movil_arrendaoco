@@ -7,16 +7,23 @@ class SesionActual {
   static String? publicId; // ID corto de 4 dígitos
 
   static bool get esPropietario {
-    final r = rol.toLowerCase().trim();
-    return r == 'arrendador' ||
-        r == 'propietario' ||
-        r == 'admin' ||
-        r == 'administrador';
+    final validRoles = ['arrendador', 'propietario', 'admin', 'administrador'];
+    
+    // Revisar rol principal
+    if (validRoles.contains(rol.toLowerCase().trim())) return true;
+    
+    // Revisar lista completa
+    return todosLosRoles.any((r) => validRoles.contains(r.toLowerCase().trim()));
   }
 
   static bool get esAdmin {
-    final r = rol.toLowerCase().trim();
-    return r == 'admin' || r == 'administrador';
+    final validRoles = ['admin', 'administrador'];
+    
+    // Revisar rol principal
+    if (validRoles.contains(rol.toLowerCase().trim())) return true;
+    
+    // Revisar lista completa
+    return todosLosRoles.any((r) => validRoles.contains(r.toLowerCase().trim()));
   }
 
   static bool get tieneMultiplesRoles => todosLosRoles.length > 1;

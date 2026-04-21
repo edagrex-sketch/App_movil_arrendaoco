@@ -12,7 +12,12 @@
           "package_name": "com.arrendaoco.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "32992727938-rreabr4tphbidr2gl683mom4ra8qpunv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBGmVWyuc2NaSC4WJf1HDMOMEV28CAJrLc"
@@ -20,7 +25,49 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "32992727938-rreabr4tphbidr2gl683mom4ra8qpunv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32992727938:android:879f7c4432c752d39e359b",
+        "android_client_info": {
+          "package_name": "com.example.arrendaoco"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "32992727938-9egsljhajv04j1b0plt1ri9kenmc3g31.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.arrendaoco",
+            "certificate_hash": "b99188f5e5254ebc2bdd755478adc21e0799647a"
+          }
+        },
+        {
+          "client_id": "32992727938-rreabr4tphbidr2gl683mom4ra8qpunv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGmVWyuc2NaSC4WJf1HDMOMEV28CAJrLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "32992727938-rreabr4tphbidr2gl683mom4ra8qpunv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

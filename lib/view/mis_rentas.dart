@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:arrendaoco/services/pusher_service.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/model/bd.dart';
@@ -30,6 +31,34 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
   void initState() {
     super.initState();
     _refreshData();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    final usuarioId = SesionActual.usuarioId;
+    final uid = int.tryParse(usuarioId ?? '0') ?? 0;
+    
+    if (uid > 0) {
+      // Iniciar el servicio de oídos globales
+      PusherService().init(onMessageReceived: (_) {}, chatId: 'global').then((_) {
+        PusherService().listenToPersonalUpdates(
+          usuarioId: uid,
+          onRentalUpdated: (contratoId, nuevoEstatus) {
+            if (mounted) {
+              // Si nos avisan que algo cambió, refrescamos todo el tablero
+              _refreshData();
+              // Opcional: Mostrar una notificación pequeña en pantalla
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Tu renta #$contratoId ahora está $nuevoEstatus'),
+                  backgroundColor: MiTema.celeste,
+                ),
+              );
+            }
+          },
+        );
+      });
+    }
   }
 
   Future<void> _refreshData() async {
@@ -62,14 +91,22 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     }
 
     // Filtrar por estado
+    // Filtrar por estado real del servidor
     final solicitudes = _rentas
-        .where((r) => r['estado'] == 'pendiente')
+        .where((r) => 
+          r['estado'] == 'pendiente_aprobacion' || 
+          r['estado'] == 'esperando_pago' ||
+          r['estado'] == 'pendiente'
+        )
         .toList();
+        
     final activas = _rentas.where((r) => r['estado'] == 'activa').toList();
 
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
+          const SizedBox(height: 20),
           // Sección de Rentas (Solicitudes y Activas)
           if (_rentas.isEmpty)
             _buildEmptyState()
@@ -79,26 +116,35 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
                 // 1. SOLICITUDES PENDIENTES
                 if (solicitudes.isNotEmpty) ...[
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.mark_email_unread_rounded,
-                          color: Colors.orange[700],
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.mark_email_unread_rounded,
+                            color: Colors.orange[700],
+                            size: 20,
+                          ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Text(
                           'Solicitudes Pendientes',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
                             color: MiTema.azul,
+                            letterSpacing: -0.5,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   ListView.builder(
                     physics: const NeverScrollableScrollPhysics(),
                     shrinkWrap: true,
@@ -107,170 +153,53 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
                     itemBuilder: (context, index) =>
                         _buildSolicitudCard(solicitudes[index]),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 30),
                 ],
 
-                // 2. RENTAS ACTIVAS (Carousel)
+                // 2. RENTAS ACTIVAS
                 if (activas.isNotEmpty) ...[
-                  SizedBox(
-                    height: 340,
-                    child: PageView.builder(
-                      controller: PageController(viewportFraction: 0.9),
-                      onPageChanged: (index) {
-                        setState(() => _currentRentIndex = index);
-                      },
-                      itemCount: activas.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: _buildRentaCard(activas[index]),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (activas.length > 1)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        activas.length,
-                        (index) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: 8,
-                          height: 8,
+                   Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
+                            color: MiTema.azul.withOpacity(0.05),
                             shape: BoxShape.circle,
-                            color: _currentRentIndex == index
-                                ? MiTema.celeste
-                                : Colors.grey[300],
+                          ),
+                          child: Icon(
+                            Icons.home_work_rounded,
+                            color: MiTema.azul,
+                            size: 20,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Tus Rentas',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: MiTema.azul,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: activas.length,
+                    itemBuilder: (context, index) {
+                      return _buildRentaCard(activas[index]);
+                    },
+                  ),
                 ],
               ],
             ),
-
-          const SizedBox(height: 24),
-
-          // CALENDARIO PREMIUM
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.calendar_month_rounded,
-                  color: MiTema.vino,
-                  size: 24,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Calendario de Pagos',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: MiTema.azul,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Header Calendario
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.chevron_left_rounded,
-                          color: MiTema.azul,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              _selectedDate.year,
-                              _selectedDate.month - 1,
-                            );
-                          });
-                        },
-                      ),
-                      Text(
-                        '${_getMonthName(_selectedDate.month).toUpperCase()} ${_selectedDate.year}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: MiTema.azul,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.chevron_right_rounded,
-                          color: MiTema.azul,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              _selectedDate.year,
-                              _selectedDate.month + 1,
-                            );
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                _buildCalendarGrid(_eventos),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Lista de Eventos / Pagos
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.event_available_rounded,
-                  color: MiTema.celeste,
-                  size: 24,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Próximos Eventos',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: MiTema.azul,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          _buildEventList(),
           const SizedBox(height: 40),
         ],
       ),
@@ -455,43 +384,27 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _rechazarRenta(
-                      renta['id'] as int,
-                      renta['arrendador_id'] as int,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey[300]!),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: Text(
-                      'Rechazar',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _aceptarRenta(
-                      renta['id'] as int,
-                      renta['arrendador_id'] as int,
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: MiTema.azul,
-                      shadowColor: MiTema.azul.withOpacity(0.4),
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'ACEPTAR',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.hourglass_empty_rounded, size: 16, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Text(
+                          'ESPERANDO APROBACIÓN DEL DUEÑO',
+                          style: TextStyle(
+                            color: Colors.orange[800],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -505,15 +418,22 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
 
   Widget _buildRentaCard(Map<String, dynamic> renta) {
     final titulo = renta['inmueble_titulo'] ?? '';
+    final direccion = renta['inmueble_direccion'] ?? 'Sin dirección';
     final m = renta['monto_mensual'];
     final double monto = double.tryParse(m?.toString() ?? '0') ?? 0.0;
-    final diaPago = renta['dia_pago'] ?? 1;
+    final diaPago = renta['dia_pago'] ?? 19;
     final estado = renta['estado'] ?? 'activa';
     final rutasRaw = (renta['rutas_imagen'] as String?) ?? '';
     final imageUrls = rutasRaw.isNotEmpty ? rutasRaw.split(',') : [];
     final primeraUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
+    
+    final fechaInicio = renta['fecha_inicio'] ?? '-';
+    final fechaFin = renta['fecha_fin'] ?? '-';
+    final arrendadorNombre = renta['arrendador_nombre'] ?? 'Propietario';
+    final arrendadorFoto = renta['arrendador_foto'] as String?;
 
     final esActiva = estado == 'activa';
+    final esCancelada = estado == 'cancelada' || estado == 'finalizada' || estado == 'rechazada';
 
     return GestureDetector(
       onTap: () {
@@ -526,7 +446,7 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
         ).then((_) => setState(() {}));
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12, top: 12),
+        margin: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(30),
@@ -541,182 +461,161 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Imagen Header
+            // Imagen Header con Badge
             Stack(
               children: [
-                Container(
-                  height: 180,
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(30),
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(30),
-                    ),
-                    child: primeraUrl != null
-                        ? ImagenDinamica(ruta: primeraUrl, fit: BoxFit.cover)
-                        : Container(color: Colors.grey[200]),
-                  ),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                  child: primeraUrl != null
+                      ? ImagenDinamica(ruta: primeraUrl, height: 160, width: double.infinity, fit: BoxFit.cover)
+                      : Container(height: 160, color: Colors.grey[200]),
                 ),
-                // Badge Estado
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: esActiva ? Colors.green : Colors.orange,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          estado.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: esActiva
-                                ? Colors.green[800]
-                                : Colors.orange[800],
-                          ),
-                        ),
-                      ],
+                if (esCancelada)
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red[400],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text('Cancelada', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                ),
               ],
             ),
 
-            // Contenido
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     titulo,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: MiTema.azul),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: MiTema.azul,
-                      letterSpacing: -0.5,
-                    ),
                   ),
-                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: MiTema.celeste.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                      Icon(Icons.location_on_rounded, size: 14, color: Colors.red[400]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          direccion,
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        child: Icon(
-                          Icons.calendar_today_rounded,
-                          size: 18,
-                          color: MiTema.celeste,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Día de corte',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[500],
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Día $diaPago de cada mes',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: MiTema.azul,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Divider(color: Colors.grey[200]),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Monto Mensual',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            '\$${monto.toString()}',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              color: MiTema.vino,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: AppGradients.accentGradient,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: MiTema.celeste.withOpacity(0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
+                  const SizedBox(height: 20),
+
+                  // GRID DE INFORMACIÓN (Clon de la Web)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            _buildMiniInfo('RENTA MENSUAL', '\$${monto.toStringAsFixed(2)}'),
+                            const SizedBox(width: 20),
+                            _buildMiniInfo('DÍA DE PAGO', diaPago.toString()),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            _buildMiniInfo('INICIO RENTA', fechaInicio),
+                            const SizedBox(width: 20),
+                            _buildMiniInfo('FIN RENTA', fechaFin),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // DUEÑO
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.grey[200],
+                        child: ClipOval(
+                          child: ImagenDinamica(ruta: arrendadorFoto ?? '', width: 28, height: 28, fit: BoxFit.cover),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Propietario', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                            Text(arrendadorNombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 20),
+
+                  // BOTONES
+                  ElevatedButton(
+                    onPressed: () {
+                       Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => DetalleRentaScreen(rentaId: renta['id'].toString()),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MiTema.azul,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Ver Propiedad'),
+                  ),
+                  if (esCancelada) ... [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text('Renta cancelada/finalizada', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMiniInfo(String label, String value) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: MiTema.azul)),
+        ],
       ),
     );
   }

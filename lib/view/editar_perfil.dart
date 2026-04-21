@@ -9,6 +9,7 @@ import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
+import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 
 class EditarPerfilScreen extends StatefulWidget {
   const EditarPerfilScreen({super.key});
@@ -195,26 +196,14 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen>
                                     width: 2,
                                   ),
                                 ),
-                                child: CircleAvatar(
-                                  radius: 60,
-                                  backgroundColor: Colors.grey[100],
-                                  backgroundImage: _nuevaFoto != null
-                                      ? FileImage(_nuevaFoto!)
-                                      : (_fotoActualUrl != null &&
-                                                _fotoActualUrl!.isNotEmpty
-                                            ? NetworkImage(_fotoActualUrl!)
-                                                  as ImageProvider
-                                            : null),
-                                  child:
-                                      (_nuevaFoto == null &&
-                                          (_fotoActualUrl == null ||
-                                              _fotoActualUrl!.isEmpty))
-                                      ? Icon(
-                                          Icons.person_rounded,
-                                          size: 60,
-                                          color: Colors.grey[400],
-                                        )
-                                      : null,
+                                child: ImagenDinamica(
+                                  ruta: _nuevaFoto != null 
+                                      ? _nuevaFoto!.path 
+                                      : (_fotoActualUrl ?? ''),
+                                  width: 120,
+                                  height: 120,
+                                  borderRadius: BorderRadius.circular(60),
+                                  fit: BoxFit.cover,
                                 ),
                               ),
                               Container(

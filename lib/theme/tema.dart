@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'arrenda_colors.dart';
 
 class MiTema {
-  // Aliases para la nueva paleta de colores LUXURY
   static Color get azul => ArrendaColors.primary;
   static Color get celeste => ArrendaColors.accent;
   static Color get crema => ArrendaColors.background;
@@ -14,9 +13,10 @@ class MiTema {
   static Color get verde => const Color(0xFF2E7D32);
   static Color get oro => ArrendaColors.gold;
 
-  static ThemeData temaApp(BuildContext context) {
+  static ThemeData lightTheme(BuildContext context) {
     return ThemeData(
       useMaterial3: true,
+      brightness: Brightness.light,
       colorScheme: ColorScheme.fromSeed(
         seedColor: ArrendaColors.primary,
         primary: ArrendaColors.primary,
@@ -45,36 +45,64 @@ class MiTema {
         ),
         iconTheme: const IconThemeData(color: ArrendaColors.primary),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: ArrendaColors.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 0,
-          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.all(20),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: ArrendaColors.accent, width: 1),
-        ),
-        hintStyle: TextStyle(color: Colors.grey[400]),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       ),
     );
+  }
+
+  static ThemeData darkTheme(BuildContext context) {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        brightness: Brightness.dark,
+        seedColor: ArrendaColors.primary,
+        primary: ArrendaColors.primary,
+        secondary: ArrendaColors.accent,
+        surface: const Color(0xFF1E1E1E),
+        background: const Color(0xFF121212),
+        error: ArrendaColors.error,
+      ),
+      scaffoldBackgroundColor: const Color(0xFF121212),
+      textTheme: GoogleFonts.outfitTextTheme(Theme.of(context).textTheme).apply(
+        bodyColor: Colors.white.withOpacity(0.9),
+        displayColor: Colors.white,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        iconTheme: IconThemeData(color: Colors.white),
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF2A2A2A),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      ),
+    );
+  }
+}
+
+class ThemeManager extends ChangeNotifier {
+  static final ThemeManager _instance = ThemeManager._internal();
+  factory ThemeManager() => _instance;
+  ThemeManager._internal();
+
+  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode get themeMode => _themeMode;
+
+  bool get isDark => _themeMode == ThemeMode.dark;
+
+  void toggleTheme(bool isDark) {
+    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
   }
 }

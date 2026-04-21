@@ -18,7 +18,7 @@ class ApiService {
 
   static String get defaultBaseUrl {
     // URL de producción (Correcta por defecto)
-    return 'https://arrendaoco-6gsmvomb.on-forge.com/api';
+    return 'https://arrendaoco.on-forge.com/api';
   }
 
   late final Dio _dio;

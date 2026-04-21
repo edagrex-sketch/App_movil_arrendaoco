@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:arrendaoco/model/bd.dart';
@@ -40,37 +41,89 @@ class NotificacionesService {
     _inicializado = true;
   }
 
+  /// Configurar Firebase Cloud Messaging (FCM)
+  static Future<void> configurarFCM() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+    // 1. Solicitar permisos (iOS y Android 13+)
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('✅ Permiso de notificaciones concedido');
+    } else {
+      print('⚠️ Permiso de notificaciones denegado');
+    }
+
+    // 2. Obtener Token (Para enviarlo al backend)
+    String? token = await messaging.getToken();
+    print('📱 FCM Token: $token');
+    // TODO: Enviar este token a Laravel cuando el usuario inicie sesión
+
+    // 3. Listener en Primer Plano (App abierta)
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      print('📩 Mensaje en primer plano: ${message.notification?.title}');
+      
+      if (message.notification != null) {
+        mostrarNotificacion(
+          titulo: message.notification!.title ?? 'Nueva Notificación',
+          cuerpo: message.notification!.body ?? '',
+          payload: message.data.toString(),
+        );
+      }
+    });
+
+    // 4. Listener cuando se abre la App desde una notificación
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('🖱️ App abierta desde notificación: ${message.data}');
+    });
+  }
+
+  /// Manejador de mensajes en segundo plano (DEBE ser una función de alto nivel)
+  static Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+    // Inicializar Firebase si es necesario para manejar la lógica
+    print('💤 Mensaje en segundo plano: ${message.messageId}');
+  }
+
   /// Mostrar notificación inmediata
   static Future<void> mostrarNotificacion({
     required String titulo,
     required String cuerpo,
     String? payload,
+    String? groupKey, // Nuevo parámetro para agrupar
   }) async {
     await inicializar();
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'arrendaoco_high_importance', // Canal ID
       'Notificaciones Prioritarias', // Canal Nombre
       channelDescription: 'Alertas que despiertan la pantalla',
-      importance: Importance.max, // Máxima importancia para despertar
-      priority: Priority.max, // Máxima prioridad
+      importance: Importance.max,
+      priority: Priority.max,
       showWhen: true,
       playSound: true,
       enableVibration: true,
-      fullScreenIntent: true, // CLAVE PARA DESPERTAR (si tiene permiso)
-      category:
-          AndroidNotificationCategory.call, // Simular llamada ayuda a despertar
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.message,
       visibility: NotificationVisibility.public,
+      groupKey: groupKey, // USAR EL ID DEL USUARIO PARA AGRUPAR
+      setAsGroupSummary: false, // Esta es una notificación individual
     );
 
-    const iosDetails = DarwinNotificationDetails();
+    const iosDetails = DarwinNotificationDetails(
+      threadIdentifier: 'arrendaoco_messages', // Agrupar también en iOS
+    );
 
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
-    // Generar un ID único de 32 bits para que NO se sobrescriban
+    // Generar un ID único de 32 bits para que NO se sobrescriban (y se puedan agrupar)
     final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
 
     await _notifications.show(
@@ -80,6 +133,25 @@ class NotificacionesService {
       details,
       payload: payload,
     );
+
+    // Si hay un groupKey, mandamos también una notificación de resumen (obligatorio en Android para que funcione el grupo)
+    if (groupKey != null) {
+      final summaryDetails = AndroidNotificationDetails(
+        'arrendaoco_high_importance',
+        'Notificaciones Prioritarias',
+        groupKey: groupKey,
+        setAsGroupSummary: true, // ESTA MARCA EL GRUPO
+        importance: Importance.max,
+        priority: Priority.max,
+      );
+      
+      await _notifications.show(
+        groupKey.hashCode, // El ID del resumen debe ser constante por grupo
+        'Mensajes nuevos',
+        'Tienes varios mensajes',
+        NotificationDetails(android: summaryDetails),
+      );
+    }
   }
 
   /// Notificar nueva renta creada

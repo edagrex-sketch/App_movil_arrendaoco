@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:arrendaoco/view/SeleccionarRolScreen.dart';
+import 'package:arrendaoco/view/registrar.dart';
 import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
 import 'package:arrendaoco/theme/tema.dart';
@@ -354,26 +354,51 @@ class LoginScreenState extends State<LoginScreen> {
 
                                 const SizedBox(height: 20),
 
-                                OutlinedButton.icon(
-                                  onPressed: loginWithGoogle,
-                                  icon: Image.network(
-                                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
-                                    height: 24,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                    border: Border.all(color: Colors.grey[200]!),
                                   ),
-                                  label: const Text(
-                                    'Iniciar sesión con Google',
-                                    style: TextStyle(
-                                      color: Colors.black87,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    minimumSize: const Size(double.infinity, 50),
-                                    side: BorderSide(color: Colors.grey[300]!),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: loginWithGoogle,
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Image.network(
+                                              'https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png',
+                                              height: 24,
+                                              width: 24,
+                                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata_rounded, color: Colors.blue, size: 24),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Flexible(
+                                              child: Text(
+                                                'Continuar con Google',
+                                                style: TextStyle(
+                                                  color: Color(0xFF444444),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  letterSpacing: 0.3,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -392,7 +417,7 @@ class LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          StunningPageRoute(page: const SeleccionarRolScreen()),
+                          StunningPageRoute(page: const RegisterScreen(rolInicial: 'inquilino')),
                         );
                       },
                       child: RichText(

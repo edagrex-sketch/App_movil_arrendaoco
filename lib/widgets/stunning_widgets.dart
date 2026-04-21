@@ -1,8 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
 
 class StunningTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -284,6 +287,7 @@ class _StunningCardState extends State<StunningCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTapDown: widget.onTap != null ? (_) => _controller.forward() : null,
       onTapUp: widget.onTap != null
@@ -297,15 +301,20 @@ class _StunningCardState extends State<StunningCard>
         scale: _scaleAnimation,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: MiTema.celeste.withValues(alpha: 0.15),
+                color: isDark 
+                    ? Colors.black.withOpacity(0.3)
+                    : MiTema.celeste.withValues(alpha: 0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
             ],
+            border: isDark 
+                ? Border.all(color: Colors.white10, width: 1)
+                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -315,6 +324,526 @@ class _StunningCardState extends State<StunningCard>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// MODELO ALTERNATIVO DE BARRA DE NAVEGACIÓN: "Liquid Gooey"
+class LiquidGooeyNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const LiquidGooeyNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 75,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF212121) : Colors.white,
+        borderRadius: BorderRadius.circular(35),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 25,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Sliding Indicator background
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.elasticOut,
+            alignment: _getAlignment(selectedIndex, items.length),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: FractionallySizedBox(
+                widthFactor: 1 / items.length,
+                child: Container(
+                  height: 55,
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.primaryGradient,
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(
+                        color: MiTema.azul.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Items
+          Row(
+            children: List.generate(items.length, (index) {
+              final isSelected = selectedIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    onDestinationSelected(index);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Icon(
+                      isSelected ? items[index].selectedIcon : items[index].icon,
+                      color: isSelected 
+                        ? Colors.white 
+                        : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                      size: 28,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Alignment _getAlignment(int index, int total) {
+    double x = -1.0 + (index / (total - 1)) * 2.0;
+    return Alignment(x, 0);
+  }
+}
+
+/// MODELO 3: "Snake Navigation" - Minimalista y Fluida
+class SnakeStunningNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const SnakeStunningNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // The "Snake" (Sliding Indicator)
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutBack,
+            alignment: _getAlignment(selectedIndex, items.length),
+            child: FractionallySizedBox(
+              widthFactor: 1 / items.length,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    height: 4,
+                    width: 30,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primaryGradient,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: MiTema.azul.withOpacity(0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Items
+          Row(
+            children: List.generate(items.length, (index) {
+              final isSelected = selectedIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    onDestinationSelected(index);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isSelected ? items[index].selectedIcon : items[index].icon,
+                        color: isSelected 
+                            ? MiTema.azul 
+                            : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                        size: 26,
+                      ).animate(target: isSelected ? 1 : 0)
+                       .scale(begin: const Offset(1, 1), end: const Offset(1.2, 1.2), duration: 200.ms),
+                      const SizedBox(height: 4),
+                      Text(
+                        items[index].label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isSelected 
+                              ? MiTema.azul 
+                              : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Alignment _getAlignment(int index, int total) {
+    double x = -1.0 + (index / (total - 1)) * 2.0;
+    return Alignment(x, 0);
+  }
+}
+
+/// MODELO 4 (PREMIUM): "Pulse Dock" - Ultra Atractivo con Efecto 3D y Neon
+class StunningPulseDock extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const StunningPulseDock({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      height: 85,
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          // Background Bar (Frosted Glass)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(35),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                height: 65,
+                decoration: BoxDecoration(
+                  color: isDark 
+                    ? Colors.black.withOpacity(0.5) 
+                    : Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(35),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          // The Neon Pulse Indicator
+          AnimatedAlign(
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.elasticOut,
+            alignment: _getAlignment(selectedIndex, items.length),
+            child: FractionallySizedBox(
+              widthFactor: 1 / items.length,
+              child: Container(
+                height: 50,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: MiTema.celeste.withOpacity(0.3),
+                      blurRadius: 25,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Icons and Interaction
+          Row(
+            children: List.generate(items.length, (index) {
+              final isSelected = selectedIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.heavyImpact();
+                    onDestinationSelected(index);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutBack,
+                    padding: EdgeInsets.only(bottom: isSelected ? 45 : 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AnimatedScale(
+                          duration: const Duration(milliseconds: 400),
+                          scale: isSelected ? 1.4 : 1.0,
+                          child: Icon(
+                            isSelected ? items[index].selectedIcon : items[index].icon,
+                            color: isSelected 
+                              ? MiTema.azul 
+                              : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                            size: 28,
+                          ),
+                        ),
+                        if (isSelected) 
+                          Text(
+                            items[index].label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: MiTema.azul,
+                            ),
+                          ).animate().fadeIn().scale(duration: 300.ms),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Alignment _getAlignment(int index, int total) {
+    double x = -1.0 + (index / (total - 1)) * 2.0;
+    return Alignment(x, 0);
+  }
+}
+
+/// MODELO 5: "Convex Morph Bar" - Elegante, Sólido y con Curva Dinámica
+class StunningConvexBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const StunningConvexBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final width = MediaQuery.of(context).size.width;
+    final itemWidth = width / items.length;
+
+    return Container(
+      height: 75,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 15,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // The Animated Circle Highlight
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutBack,
+            left: (selectedIndex * itemWidth) + (itemWidth / 2) - 30,
+            top: -20,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: AppGradients.primaryGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: MiTema.azul.withOpacity(0.4),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Items
+          Row(
+            children: List.generate(items.length, (index) {
+              final isSelected = selectedIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    onDestinationSelected(index);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 500),
+                        margin: EdgeInsets.only(bottom: isSelected ? 25 : 0),
+                        child: Icon(
+                          isSelected ? items[index].selectedIcon : items[index].icon,
+                          color: isSelected 
+                            ? Colors.white 
+                            : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                          size: 28,
+                        ),
+                      ),
+                      if (!isSelected)
+                        Text(
+                          items[index].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.grey[500] : Colors.grey[400],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// MODELO 6: "Crystal Bubble Bar" - Ultra Minimalista, Limpio y con Brillo
+class StunningCrystalBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const StunningCrystalBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      height: 65,
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF252525) : Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(items.length, (index) {
+          final isSelected = selectedIndex == index;
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onDestinationSelected(index);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected 
+                    ? MiTema.celeste.withOpacity(isDark ? 0.2 : 0.1) 
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isSelected ? items[index].selectedIcon : items[index].icon,
+                    color: isSelected ? MiTema.celeste : (isDark ? Colors.grey[500] : Colors.grey[400]),
+                    size: 24,
+                  ),
+                  if (isSelected)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        items[index].label,
+                        style: TextStyle(
+                          color: MiTema.celeste,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ).animate().fadeIn().moveX(begin: -5, end: 0, duration: 200.ms),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -665,3 +1194,98 @@ class StunningPageRoute<T> extends PageRouteBuilder<T> {
         reverseTransitionDuration: const Duration(milliseconds: 500),
       );
 }
+
+class StunningNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onDestinationSelected;
+  final List<StunningNavItem> items;
+
+  const StunningNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(items.length, (index) {
+          final isSelected = selectedIndex == index;
+          final item = items[index];
+
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onDestinationSelected(index);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.elasticOut,
+              padding: EdgeInsets.symmetric(
+                horizontal: isSelected ? 20 : 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: isSelected 
+                    ? MiTema.celeste.withOpacity(0.12) 
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isSelected ? item.selectedIcon : item.icon,
+                    color: isSelected ? MiTema.azul : Colors.grey[400],
+                    size: 26,
+                  ),
+                  if (isSelected) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        color: MiTema.azul,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ).animate().fadeIn().scale(duration: 300.ms),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class StunningNavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+
+  const StunningNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+}
+

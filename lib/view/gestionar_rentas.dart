@@ -5,6 +5,7 @@ import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_renta.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/services/pusher_service.dart';
 
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 
@@ -30,6 +31,31 @@ class _GestionarRentasScreenState extends State<GestionarRentasScreen> {
   void initState() {
     super.initState();
     _refreshData();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    final usuarioId = SesionActual.usuarioId;
+    final uid = int.tryParse(usuarioId ?? '0') ?? 0;
+
+    if (uid > 0) {
+      PusherService().init(onMessageReceived: (_) {}, chatId: 'global').then((_) {
+        PusherService().listenToPersonalUpdates(
+          usuarioId: uid,
+          onRentalUpdated: (contratoId, nuevoEstatus) {
+            if (mounted) {
+              _refreshData();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Actualización en Renta #$contratoId: $nuevoEstatus'),
+                  backgroundColor: MiTema.azul,
+                ),
+              );
+            }
+          },
+        );
+      });
+    }
   }
 
   Future<void> _refreshData() async {

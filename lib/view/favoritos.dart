@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:arrendaoco/theme/tema.dart';
+import 'package:arrendaoco/theme/app_gradients.dart';
+import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
@@ -9,6 +11,7 @@ import 'dart:async';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/services.dart';
 import 'package:arrendaoco/utils/casting.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class FavoritosScreen extends StatefulWidget {
   const FavoritosScreen({super.key});
@@ -17,23 +20,20 @@ class FavoritosScreen extends StatefulWidget {
   State<FavoritosScreen> createState() => _FavoritosScreenState();
 }
 
-class _FavoritosScreenState extends State<FavoritosScreen>
-    with SingleTickerProviderStateMixin {
+class _FavoritosScreenState extends State<FavoritosScreen> {
   final ApiService _api = ApiService();
   List<Map<String, dynamic>> _favoritos = [];
   bool _cargando = true;
-  late AnimationController _controller;
+
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
     _cargarDatos();
   }
 
   Future<void> _cargarDatos() async {
+    if (!mounted) return;
+    setState(() => _cargando = true);
     try {
       final response = await _api.get('/favoritos');
       if (response.statusCode == 200) {
@@ -42,7 +42,6 @@ class _FavoritosScreenState extends State<FavoritosScreen>
           setState(() {
             _favoritos = List<Map<String, dynamic>>.from(data);
             _cargando = false;
-            _controller.forward(from: 0);
           });
         }
       }
@@ -52,130 +51,217 @@ class _FavoritosScreenState extends State<FavoritosScreen>
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _toggleFavorito(Map<String, dynamic> inmueble) async {
+    HapticFeedback.lightImpact();
+    // Optimistic UI update (optional, but better feel)
+    setState(() {
+      _favoritos.removeWhere((item) => item['id'] == inmueble['id']);
+    });
+
+    try {
+      final response = await _api.post('/favoritos/${inmueble['id']}/toggle');
+      if (response.statusCode != 200) {
+        // Revert if failed
+        _cargarDatos();
+      }
+    } catch (e) {
+      debugPrint('Error eliminando favorito: $e');
+      _cargarDatos();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Retornamos directamente el body porque el shell (InquilinoHome) ya tiene Scaffold/AppBar
-    return _buildBody();
-  }
-
-  Widget _buildBody() {
-    if (_cargando) {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.75,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: 6,
-          itemBuilder: (context, index) =>
-              const StunningShimmerCard(isGrid: true),
-        ),
-      );
-    }
-
-    if (_favoritos.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Lottie.asset(
-              'assets/animations/empty.json',
-              width: 250,
-              height: 250,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  Icons.favorite_border_rounded,
-                  size: 100,
-                  color: Colors.grey[300],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Tu colección está vacía',
-              style: TextStyle(
-                fontSize: 22,
-                color: MiTema.azul,
-                fontWeight: FontWeight.bold,
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // AppBar Premium con Gradiente
+          SliverAppBar(
+            expandedHeight: 120.0,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            stretch: true,
+            backgroundColor: MiTema.azul,
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              titlePadding: const EdgeInsets.only(bottom: 16),
+              title: const Text(
+                'Mis Favoritos',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppGradients.primaryGradient,
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -20,
+                      top: -20,
+                      child: Icon(
+                        Icons.favorite_rounded,
+                        size: 150,
+                        color: Colors.white.withOpacity(0.05),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Explora y guarda los inmuebles que te encanten para verlos aquí.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-              ),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
             ),
-          ],
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.only(
-        top:
-            100, // Espacio para el AppBar transparente del padre (aprox kToolbarHeight + safeArea)
-        left: 16,
-        right: 16,
-        bottom: 16,
-      ),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75, // Ligeramente más anchas para evitar overflow
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: _favoritos.length,
-      itemBuilder: (context, index) {
-        final inmueble = _favoritos[index];
-        // Staggered animation
-        final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: Interval(
-              (1 / _favoritos.length) * index,
-              1.0,
-              curve: Curves.easeOutQuart,
-            ),
+            actions: [
+              if (_favoritos.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                  onPressed: _cargarDatos,
+                ),
+            ],
           ),
-        );
 
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.2),
-              end: Offset.zero,
-            ).animate(animation),
-            child: _buildFavoritoCard(inmueble),
-          ),
-        );
-      },
+          // Contenido Principal
+          if (_cargando)
+            _buildLoadingState()
+          else if (_favoritos.isEmpty)
+            _buildEmptyState()
+          else
+            _buildFavoritesGrid(),
+          
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
+        ],
+      ),
     );
   }
 
-  Widget _buildFavoritoCard(Map<String, dynamic> inmueble) {
-    final titulo = inmueble['titulo'] ?? 'Inmueble';
-    final precio = Parser.toDouble(inmueble['renta_mensual']);
-    final categoria = inmueble['tipo'] ?? 'General';
-    final primeraUrl = inmueble['imagen_portada'];
+  Widget _buildLoadingState() {
+    return SliverPadding(
+      padding: const EdgeInsets.all(16.0),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.72,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => const StunningShimmerCard(isGrid: true),
+          childCount: 6,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: MiTema.celeste.withOpacity(0.1),
+                      blurRadius: 30,
+                      spreadRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Lottie.asset(
+                  'assets/animations/empty.json',
+                  width: 180,
+                  height: 180,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => 
+                      Icon(Icons.favorite_border_rounded, size: 60, color: Colors.grey[300]),
+                ),
+              ).animate().scale(delay: 200.ms, duration: 500.ms, curve: Curves.easeOutBack),
+              const SizedBox(height: 32),
+              Text(
+                'Aún no hay favoritos',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: MiTema.azul,
+                ),
+              ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.3),
+              const SizedBox(height: 12),
+              Text(
+                'Guarda los lugares que más te gusten para tenerlos siempre a mano.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey[600],
+                  height: 1.5,
+                ),
+              ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.3),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: MiTema.azul,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 5,
+                ),
+                child: const Text('EXPLORAR AHORA', style: TextStyle(fontWeight: FontWeight.bold)),
+              ).animate().fadeIn(delay: 800.ms).scale(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoritesGrid() {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.68,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final inmueble = _favoritos[index];
+            return _buildFavoriteCard(inmueble, index);
+          },
+          childCount: _favoritos.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteCard(Map<String, dynamic> inmueble, int index) {
+    final String titulo = inmueble['titulo'] ?? 'Inmueble';
+    final double precio = Parser.toDouble(inmueble['renta_mensual']);
+    final String categoria = (inmueble['tipo'] ?? 'Propiedad').toString().toUpperCase();
+    final String? imagePath = inmueble['imagen_portada'];
+    final String ubicacion = inmueble['direccion'] ?? 'Sin ubicación';
 
     return StunningCard(
       padding: EdgeInsets.zero,
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => DetalleInmuebleScreen(
@@ -184,154 +270,170 @@ class _FavoritosScreenState extends State<FavoritosScreen>
             ),
           ),
         );
+        _cargarDatos(); // Actualizar al volver por si se desmarcó
       },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Calculamos alturas fijas basadas en el layout disponible
-          final imageHeight = constraints.maxHeight * 0.65;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: imageHeight,
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (primeraUrl != null)
-                      ImagenDinamica(ruta: primeraUrl, fit: BoxFit.cover)
-                    else
-                      Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Imagen con Tag de Precio y Categoria
+          Expanded(
+            flex: 12,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: imagePath != null
+                    ? ImagenDinamica(ruta: imagePath, fit: BoxFit.cover)
+                    : Container(
                         color: Colors.grey[200],
-                        child: Icon(
-                          Icons.image_not_supported_rounded,
-                          color: Colors.grey[400],
-                          size: 40,
-                        ),
+                        child: Icon(Icons.home_work_outlined, color: Colors.grey[400], size: 40),
                       ),
-                    // Gradient overlay
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 60,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.6),
-                            ],
-                          ),
-                        ),
+                ),
+                // Overlay Gradiente Inferior
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.05),
+                          Colors.black.withOpacity(0.5),
+                        ],
+                        stops: const [0.6, 0.8, 1.0],
                       ),
                     ),
-                    // Price Tag overlay
-                    Positioned(
-                      bottom: 8,
-                      left: 8,
-                      right: 8,
-                      child: Text(
-                        '\$$precio/mes',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black45,
-                              offset: Offset(0, 2),
-                              blurRadius: 4,
+                  ),
+                ),
+                // Categoría Tag
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      categoria,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: MiTema.azul,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+                // Botón Favorito (Toggle)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _toggleFavorito(inmueble),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    // Remove button overlay
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: GestureDetector(
-                        onTap: () async {
-                          HapticFeedback.mediumImpact();
-                          try {
-                            final response = await _api.post(
-                              '/favoritos/${inmueble['id']}/toggle',
-                            );
-                            if (response.statusCode == 200) {
-                              _cargarDatos(); // Recargar lista
-                            }
-                          } catch (e) {
-                            debugPrint('Error eliminando favorito: $e');
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.favorite_rounded,
-                            color: MiTema.rojo,
-                            size: 16,
-                          ),
+                        child: Icon(
+                          Icons.favorite_rounded,
+                          color: MiTema.rojo,
+                          size: 18,
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
+                // Precio (Inferior)
+                Positioned(
+                  bottom: 10,
+                  left: 10,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        categoria.toString().toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: MiTema.celeste,
-                          letterSpacing: 0.5,
+                        '\$${precio.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.5,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        titulo.toString(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      const Text(
+                        'al mes',
                         style: TextStyle(
-                          fontSize: 13,
+                          color: Colors.white70,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: MiTema.azul,
-                          height: 1.1,
                         ),
                       ),
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
+          
+          // Detalles de Información
+          Expanded(
+            flex: 7,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    titulo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: MiTema.azul,
+                      height: 1.1,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_rounded, size: 12, color: MiTema.celeste),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          ubicacion,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
-    );
+    ).animate(delay: (index * 50).ms).fadeIn(duration: 400.ms).slideY(begin: 0.1, curve: Curves.easeOutCubic);
   }
 }

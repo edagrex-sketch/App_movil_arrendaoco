@@ -58,9 +58,15 @@ class FCMService {
             );
 
             if (message.notification != null) {
+              // Intentar obtener una clave de grupo (ID del chat o del remitente)
+              final groupKey = message.data['chat_id']?.toString() ?? 
+                               message.data['sender_id']?.toString();
+
               NotificacionesService.mostrarNotificacion(
                 titulo: message.notification!.title ?? 'Notificación',
                 cuerpo: message.notification!.body ?? '',
+                groupKey: groupKey,
+                payload: message.data.toString(),
               );
             }
           });

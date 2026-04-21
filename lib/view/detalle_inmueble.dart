@@ -3,14 +3,16 @@ import 'package:arrendaoco/theme/tema.dart';
 import 'package:arrendaoco/widgets/map_preview_osm.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
+import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/services/api_service.dart';
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:arrendaoco/utils/casting.dart';
-import 'package:arrendaoco/view/checkout.dart';
+import 'package:arrendaoco/view/ver_contrato_solicitud.dart';
 import 'package:arrendaoco/view/chats/chat_screen.dart';
 import 'package:arrendaoco/view/roco_chat.dart';
 
@@ -41,6 +43,8 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
   double _promedioRating = 0.0;
   int _totalResenas = 0;
   bool _esFavorito = false;
+  bool _tieneRentaActiva = false;
+  Map<String, dynamic>? _inmuebleActual;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -53,9 +57,11 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     super.initState();
     _pageController = PageController();
     _highlightedResenaId = widget.highlightResenaId;
+    _inmuebleActual = Map<String, dynamic>.from(widget.inmueble);
 
     _cargarResenas();
     _verificarFavorito();
+    _verificarRentasActivas();
 
     if (widget.scrollToReviews || widget.highlightResenaId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -83,6 +89,26 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
       }
     } catch (e) {
       debugPrint('Error verificando favorito: $e');
+    }
+  }
+
+  Future<void> _verificarRentasActivas() async {
+    if (SesionActual.usuarioId == null) return;
+    try {
+      final response = await _api.get('/contratos');
+      if (response.statusCode == 200) {
+        final List<dynamic> rentas = response.data['data'] ?? [];
+        final hasActive = rentas.any((r) =>
+            ['activo', 'activa', 'pendiente_aprobacion', 'esperando_pago']
+                .contains(r['estado']));
+        if (mounted) {
+          setState(() {
+            _tieneRentaActiva = hasActive;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error verificando rentas: $e');
     }
   }
 
@@ -126,6 +152,7 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
         final data = response.data['data'];
         if (mounted) {
           setState(() {
+            _inmuebleActual = Map<String, dynamic>.from(data);
             _resenas = List<Map<String, dynamic>>.from(data['resenas'] ?? []);
             _promedioRating =
                 (data['promedio_calificacion'] as num?)?.toDouble() ?? 0.0;
@@ -224,7 +251,11 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final inmueble = widget.inmueble;
+    if (_inmuebleActual == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    
+    final inmueble = _inmuebleActual!;
     final titulo = inmueble['titulo'] ?? '';
     final descripcion = inmueble['descripcion'] ?? '';
     final precio = Parser.toDouble(inmueble['renta_mensual']);
@@ -233,22 +264,77 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
     final latitud = Parser.toDouble(inmueble['latitud']);
     final longitud = Parser.toDouble(inmueble['longitud']);
 
-    // En Laravel API 'imagenes' es una lista de objetos {id, url}
     final List<dynamic> imgList = inmueble['imagenes'] ?? [];
     final imagenes = imgList.map((img) => img['url'].toString()).toList();
 
-    // Si no hay imágenes en la lista pero hay portada, añadirla
     if (imagenes.isEmpty && inmueble['imagen_portada'] != null) {
       imagenes.add(inmueble['imagen_portada'].toString());
     }
 
+    final metros = Parser.paramInt(inmueble['metros']);
     final camas = Parser.paramInt(inmueble['habitaciones']);
     final banos = Parser.paramInt(inmueble['banos']);
     final mediosBanos = Parser.paramInt(inmueble['medios_banos']);
     final banoCompartido = inmueble['bano_compartido'] == true ||
         inmueble['bano_compartido'] == 1 ||
         inmueble['bano_compartido'] == "1";
-    final metros = Parser.paramInt(inmueble['metros']);
+    
+    // Nuevos campos de paridad
+    final tieneEstacionamiento = (inmueble['tiene_estacionamiento'] == true || inmueble['tiene_estacionamiento'] == 1);
+    final estacionamientoCount = Parser.paramInt(inmueble['estacionamiento']);
+    final permiteMascotas = (inmueble['permite_mascotas'] == true || inmueble['permite_mascotas'] == 1);
+    
+    // Procesar Tipos de Mascotas (List o String JSON)
+    final List<String> tiposMascotas = inmueble['tipos_mascotas'] is List 
+        ? List<String>.from(inmueble['tipos_mascotas']) 
+        : (inmueble['tipos_mascotas'] is String ? List<String>.from(jsonDecode(inmueble['tipos_mascotas'])) : []);
+
+    final estadoMobiliario = inmueble['estado_mobiliario'] ?? 'No especificado';
+    final esAmueblado = (estadoMobiliario != 'No amueblado' && estadoMobiliario != 'Sin muebles' && estadoMobiliario != 'No especificado');
+    
+    // Procesar Mapa de Pagos de Servicios (Manejo robusto de tipos)
+    Map<String, dynamic> rawPagos = {};
+    final rawData = inmueble['pago_servicio'];
+    
+    if (rawData is Map) {
+      rawPagos = Map<String, dynamic>.from(rawData);
+    } else if (rawData is String && rawData.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawData);
+        if (decoded is Map) {
+          rawPagos = Map<String, dynamic>.from(decoded);
+        }
+      } catch (e) {
+        debugPrint('Error decodificando pago_servicio: $e');
+      }
+    }
+    
+    final List<String> serviciosPropietario = [];
+    final List<String> serviciosInquilino = [];
+    
+    rawPagos.forEach((servicio, responsable) {
+      if (responsable == null) return;
+      final resp = responsable.toString().trim().toLowerCase();
+      
+      // Si dice Inquilino, se va al inquilino. Cualquier otra cosa (Arrendador, Propietario, Dueño, etc.) al propietario.
+      if (resp.contains('inquilino')) {
+        serviciosInquilino.add(servicio);
+      } else if (resp.isNotEmpty) {
+        serviciosPropietario.add(servicio);
+      }
+    });
+
+    // Fallback: Si el mapa de pagos está vacío pero hay servicios_incluidos (legacy), usarlos
+    if (serviciosPropietario.isEmpty && serviciosInquilino.isEmpty) {
+      final legacy = inmueble['servicios_incluidos'];
+      if (legacy is List) {
+        serviciosPropietario.addAll(List<String>.from(legacy));
+      }
+    }
+
+    final momentoPago = inmueble['momento_pago'] ?? 'No especificado';
+    final duracionContrato = inmueble['duracion_contrato_meses'] ?? 0;
+    final diasTolerancia = inmueble['dias_tolerancia'] ?? 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -499,36 +585,83 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         ],
                       ),
                     ),
-                    if (banoCompartido) ...[
-                      const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+                    
+                    // Nueva sección de Amueblado y Estacionamiento más clara
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _AmenityCard(
+                            icon: Icons.chair_rounded,
+                            label: 'Mobiliario',
+                            value: esAmueblado ? 'Amueblado' : 'Sin muebles',
+                            color: Colors.purple,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _AmenityCard(
+                            icon: Icons.directions_car_rounded,
+                            label: 'Cajones',
+                            value: estacionamientoCount > 0 
+                              ? '$estacionamientoCount lugar${estacionamientoCount > 1 ? "es" : ""}' 
+                              : 'No incluido',
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+                    if (permiteMascotas)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                        margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange[300]!),
+                          color: const Color(0xFFF8FAFD),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.grey.withOpacity(0.08)),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.people_outline_rounded,
-                                size: 16, color: Colors.orange[700]),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Baño compartido',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange[700],
-                              ),
+                            Row(
+                              children: [
+                                Icon(Icons.pets_rounded, size: 16, color: MiTema.celeste),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'MASCOTAS PERMITIDAS:',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF7D94B5),
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: tiposMascotas.map((m) => _PetChip(label: m)).toList(),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    
+                    if (banoCompartido)
+                      Wrap(
+                        children: [
+                          _FeatureChip(
+                            icon: Icons.people_outline_rounded,
+                            label: 'Baño compartido',
+                            color: Colors.blue[700]!,
+                            bgColor: Colors.blue[50]!,
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 24),
                     Text(
                       'Descripción',
@@ -544,6 +677,54 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                         fontSize: 15,
                         color: Colors.grey[700],
                         height: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    
+                    // TABLA DE SERVICIOS PROPIETARIO VS INQUILINO
+                    Text(
+                      'Servicios del Inmueble',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildServiciosTable(serviciosPropietario, serviciosInquilino),
+                    
+                    const SizedBox(height: 30),
+                    
+                    // SECCION CONTRATO
+                    Text(
+                      'Condiciones del contrato',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: MiTema.azul,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    StunningCard(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          _ContractRow(
+                            label: 'Duración mínima', 
+                            value: '$duracionContrato meses', 
+                            icon: Icons.calendar_today_rounded
+                          ),
+                          const Divider(),
+                          _ContractRow(
+                            label: 'Fecha de pago', 
+                            value: momentoPago, 
+                            icon: Icons.payments_rounded
+                          ),
+                          const Divider(),
+                          _ContractRow(
+                            label: 'Tolerancia', 
+                            value: '$diasTolerancia días', 
+                            icon: Icons.timer_rounded
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 30),
@@ -725,53 +906,159 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      flex: 1,
+                      flex: 2,
                       child: OutlinedButton(
                         onPressed: () async {
-                          final proId = widget.inmueble['usuario_id'] ?? widget.inmueble['propietario_id'];
-                          final inmuId = widget.inmueble['id'];
-                          if (proId == null) return;
+                          final inmu = _inmuebleActual ?? widget.inmueble;
+                          final proId = inmu['usuario']?['id'] ?? 
+                                        inmu['propietario']?['id'] ??
+                                        inmu['arrendador']?['id'] ??
+                                        inmu['usuario_id'] ?? 
+                                        inmu['propietario_id'];
+                          final inmuId = inmu['id'];
+                          
+                          if (proId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('No se encontró información del propietario. Intenta de nuevo.')),
+                            );
+                            return;
+                          }
+
+                          if (proId.toString() == SesionActual.usuarioId.toString()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('No puedes iniciar un chat contigo mismo')),
+                            );
+                            return;
+                          }
+                          
+                          LottieLoading.showLoadingDialog(context, message: 'Conectando con el propietario...');
                           
                           try {
                             final response = await _api.post('/chats/iniciar/$proId/$inmuId');
-                            if (response.statusCode == 200) {
+                            if (mounted) LottieLoading.hideLoadingDialog(context);
+                            
+                            if (response.statusCode == 200 || response.statusCode == 201) {
                               final chatData = response.data['data'];
+                              final otroUser = chatData['receptor'] ?? chatData['otro_usuario'] ?? {
+                                'id': proId,
+                                'nombre': 'Propietario',
+                              };
+
                               if (mounted) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ChatScreen(
                                       chatId: chatData['id'],
-                                      otroUsuario: chatData['usuario_1'].toString() == SesionActual.usuarioId.toString() 
-                                        ? chatData['usuario2'] 
-                                        : chatData['usuario1'],
-                                      inmueble: chatData['inmueble'],
+                                      otroUsuario: otroUser,
+                                      inmueble: Map<String, dynamic>.from(widget.inmueble),
                                     ),
                                   ),
                                 );
                               }
                             }
                           } catch (e) {
-                            debugPrint('Error iniciando chat: $e');
+                            if (mounted) {
+                              LottieLoading.hideLoadingDialog(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error al conectar: $e')),
+                              );
+                            }
                           }
                         },
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: MiTema.azul, width: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          side: BorderSide(color: MiTema.azul, width: 1.5),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          backgroundColor: Colors.white,
                         ),
-                        child: Icon(Icons.chat_bubble_outline_rounded, color: MiTema.azul),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, color: MiTema.azul, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Contactar',
+                              style: TextStyle(
+                                color: MiTema.azul,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 3,
-                      child: StunningButton(
+                      child: !SesionActual.esPropietario && widget.usuarioId != null
+            ? Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: _tieneRentaActiva
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded,
+                              color: Colors.orange[800]),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Ya tienes una renta activa o solicitud en proceso. Finaliza tu renta actual para solicitar otra.',
+                              style: TextStyle(
+                                  color: Colors.orange[900],
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ElevatedButton(
+                      onPressed: disponible
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => VerContratoSolicitudScreen(
+                                    inmueble: inmueble,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MiTema.azul,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 60),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 8,
+                        shadowColor: MiTema.azul.withOpacity(0.4),
+                      ),
+                      child: Text(
+                        disponible ? 'Rentar ahora' : 'No disponible',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+            )
+            : StunningButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => CheckoutScreen(inmueble: widget.inmueble),
+                              builder: (context) => VerContratoSolicitudScreen(inmueble: widget.inmueble),
                             ),
                           );
                         },
@@ -1032,6 +1319,304 @@ class _DetalleInmuebleScreenState extends State<DetalleInmuebleScreen> {
           );
         }
       }),
+    );
+  }
+
+  Widget _buildServiciosTable(List<String> prop, List<String> inq) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E7), // Color crema de la imagen
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orange.withOpacity(0.1)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          children: [
+            // Cabecera
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTableheader(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'PAGA PROPIETARIO',
+                    tag: 'INCLUIDO',
+                  ),
+                ),
+                Container(width: 1, height: 40, color: Colors.white.withOpacity(0.5)),
+                Expanded(
+                  child: _buildTableheader(
+                    icon: Icons.error_outline_rounded,
+                    label: 'PAGA INQUILINO',
+                    tag: 'EXTRA',
+                  ),
+                ),
+              ],
+            ),
+            // Cuerpo
+            Container(
+              color: Colors.white.withOpacity(0.5),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildServiceList(prop, isOwner: true),
+                    ),
+                    Container(width: 1, color: const Color(0xFFF3E5C2)),
+                    Expanded(
+                      child: _buildServiceList(inq, isOwner: false),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableheader({required IconData icon, required String label, required String tag}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF1E293B)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1E293B),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              tag,
+              style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceList(List<String> services, {required bool isOwner}) {
+    if (services.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('-', style: TextStyle(color: Colors.grey)),
+      );
+    }
+    return Column(
+      children: services.map((s) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: const Color(0xFFF3E5C2).withOpacity(0.5))),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isOwner ? Icons.check_rounded : Icons.close_rounded, 
+              size: 16, 
+              color: isOwner ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.2),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                s,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+}
+
+class _PetChip extends StatelessWidget {
+  final String label;
+  const _PetChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF1E293B),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceItem extends StatelessWidget {
+  final String nombre;
+
+  const _ServiceItem({required this.nombre});
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon = Icons.check_circle_outline_rounded;
+    String low = nombre.toLowerCase();
+    
+    if (low.contains('wifi') || low.contains('internet')) icon = Icons.wifi_rounded;
+    else if (low.contains('agua')) icon = Icons.water_drop_rounded;
+    else if (low.contains('luz') || low.contains('electricidad')) icon = Icons.lightbulb_outline_rounded;
+    else if (low.contains('gas')) icon = Icons.propane_tank_outlined;
+    else if (low.contains('limpieza')) icon = Icons.cleaning_services_rounded;
+    else if (low.contains('seguridad')) icon = Icons.security_rounded;
+    else if (low.contains('tv') || low.contains('cable')) icon = Icons.tv_rounded;
+
+    return Container(
+      width: (MediaQuery.of(context).size.width - 100) / 2, // Mitad de la tarjeta aprox
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: MiTema.celeste.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: MiTema.celeste, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              nombre,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: MiTema.azul.withOpacity(0.8),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmenityCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _AmenityCard({required this.icon, required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: MiTema.azul), overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
+
+  const _FeatureChip({required this.icon, required this.label, required this.color, required this.bgColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContractRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _ContractRow({required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: MiTema.azul.withOpacity(0.6), size: 20),
+          const SizedBox(width: 15),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w800, color: MiTema.azul)),
+        ],
+      ),
     );
   }
 }

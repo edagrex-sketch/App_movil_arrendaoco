@@ -165,15 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 color: Colors.white,
                               ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Como ${widget.rolInicial}',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 10),
 
                         StunningCard(
                           child: Form(
