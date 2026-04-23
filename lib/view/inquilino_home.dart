@@ -12,6 +12,8 @@ import 'package:arrendaoco/view/roco_chat.dart';
 import 'package:arrendaoco/widgets/premium_navbar.dart';
 import 'package:arrendaoco/view/chats/chat_list_screen.dart';
 import 'package:arrendaoco/widgets/animated_rocco_fab.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:arrendaoco/view/arrendador.dart'; // Import to use InicioFeed
 
 class InquilinoHomeScreen extends StatefulWidget {
   final String usuarioId;
@@ -30,23 +32,12 @@ class InquilinoHomeScreen extends StatefulWidget {
 class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   late int _currentIndex;
 
-  final List<String> _titulos = [
-    'Inicio',
-    'Mis Rentas',
-    'Mi Perfil',
-  ];
 
-  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _pages = [
-      const ExplorarScreen(),
-      const MisRentasScreen(),
-      const PerfilScreen(),
-    ];
     final uid = int.tryParse(widget.usuarioId) ?? 0;
     if (uid > 0) {
       FCMService.initialize(uid);
@@ -56,71 +47,109 @@ class _InquilinoHomeScreenState extends State<InquilinoHomeScreen> {
   @override
   Widget build(BuildContext context) {
 
-    return Scaffold(
-      backgroundColor: ArrendaColors.background,
-      extendBody: false,
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
-          child: Image.asset(
-            'assets/images/logo.png',
-            fit: BoxFit.contain,
-            color: Colors.white,
-          ),
-        ),
-        leadingWidth: 56,
-        title: Text(
-          _titulos[_currentIndex],
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 20,
-          ),
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: AppGradients.primaryGradient,
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        elevation: 0,
-        actions: [
-          NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
-        ],
-      ),
-      bottomNavigationBar: PremiumFloatingNavBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
-        items: const [
+    final bool esProp = SesionActual.esPropietario;
+    
+    final List<String> titulos = esProp 
+      ? ['Propiedades', 'Explorar', 'Perfil']
+      : ['Explorar', 'Perfil'];
+
+    final List<Widget> pages = esProp
+      ? [
+          InicioFeed(usuarioId: widget.usuarioId),
+          const ExplorarScreen(),
+          const PerfilScreen(),
+        ]
+      : [
+          const ExplorarScreen(),
+          const PerfilScreen(),
+        ];
+
+    final List<StunningNavItem> navItems = esProp
+      ? const [
           StunningNavItem(
-            icon: Icons.home_outlined, 
-            selectedIcon: Icons.home_rounded, 
+            icon: Icons.home_work_outlined, 
+            selectedIcon: Icons.home_work_rounded, 
+            label: 'Propiedades',
+          ),
+          StunningNavItem(
+            icon: Icons.search_outlined, 
+            selectedIcon: Icons.search_rounded, 
             label: 'Explorar',
-          ),
-          StunningNavItem(
-            icon: Icons.receipt_long_outlined, 
-            selectedIcon: Icons.receipt_long_rounded, 
-            label: 'Mis Rentas',
           ),
           StunningNavItem(
             icon: Icons.person_outline_rounded, 
             selectedIcon: Icons.person_rounded, 
             label: 'Perfil',
           ),
-        ],
-      ),
-      floatingActionButton: const Padding(
-        padding: EdgeInsets.only(bottom: 25),
-        child: AnimatedRoccoFab(),
-      ),
-      body: SafeArea(
-        top: false, // El contenido debe llegar hasta arriba bajo el AppBar
-        bottom: false, // Y hasta abajo bajo el Navbar
-        child: _pages[_currentIndex],
-      ),
+        ]
+      : const [
+          StunningNavItem(
+            icon: Icons.search_outlined, 
+            selectedIcon: Icons.search_rounded, 
+            label: 'Explorar',
+          ),
+          StunningNavItem(
+            icon: Icons.person_outline_rounded, 
+            selectedIcon: Icons.person_rounded, 
+            label: 'Perfil',
+          ),
+        ];
+
+    // Ajustar índice si cambia el número de pestañas
+    if (_currentIndex >= titulos.length) {
+      _currentIndex = titulos.length - 1;
+    }
+
+    return Stack(
+      children: [
+        Scaffold(
+          extendBody: true,
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.contain,
+                color: Colors.white,
+              ),
+            ),
+            leadingWidth: 56,
+            title: Text(
+              titulos[_currentIndex],
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 20,
+              ),
+            ),
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: AppGradients.primaryGradient,
+              ),
+            ),
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            automaticallyImplyLeading: false,
+            elevation: 0,
+            actions: [
+              NotificationBadge(usuarioId: int.tryParse(widget.usuarioId) ?? 0),
+            ],
+          ),
+          bottomNavigationBar: PremiumFloatingNavBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (i) => setState(() => _currentIndex = i),
+            items: navItems,
+          ),
+          body: SafeArea(
+            top: false, 
+            bottom: false,
+            child: pages[_currentIndex],
+          ),
+        ),
+        const AnimatedRoccoFab(),
+      ],
     );
   }
 }

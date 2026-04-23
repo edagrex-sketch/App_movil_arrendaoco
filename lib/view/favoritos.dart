@@ -72,99 +72,29 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // AppBar Premium con Gradiente
-          SliverAppBar(
-            expandedHeight: 120.0,
-            floating: false,
-            pinned: true,
-            elevation: 0,
-            stretch: true,
-            backgroundColor: MiTema.azul,
-            flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              titlePadding: const EdgeInsets.only(bottom: 16),
-              title: const Text(
-                'Mis Favoritos',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppGradients.primaryGradient,
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -20,
-                      top: -20,
-                      child: Icon(
-                        Icons.favorite_rounded,
-                        size: 150,
-                        color: Colors.white.withOpacity(0.05),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            actions: [
-              if (_favoritos.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                  onPressed: _cargarDatos,
-                ),
-            ],
-          ),
-
-          // Contenido Principal
-          if (_cargando)
-            _buildLoadingState()
-          else if (_favoritos.isEmpty)
-            _buildEmptyState()
-          else
-            _buildFavoritesGrid(),
-          
-          const SliverToBoxAdapter(child: SizedBox(height: 30)),
-        ],
-      ),
-    );
+    if (_cargando) return _buildLoadingStateContent();
+    if (_favoritos.isEmpty) return _buildEmptyStateContent();
+    return _buildFavoritesGridContent();
   }
 
-  Widget _buildLoadingState() {
-    return SliverPadding(
+  Widget _buildLoadingStateContent() {
+    return Padding(
       padding: const EdgeInsets.all(16.0),
-      sliver: SliverGrid(
+      child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           childAspectRatio: 0.72,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => const StunningShimmerCard(isGrid: true),
-          childCount: 6,
-        ),
+        itemBuilder: (context, index) => const StunningShimmerCard(isGrid: true),
+        itemCount: 6,
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return SliverFillRemaining(
-      hasScrollBody: false,
-      child: Center(
+  Widget _buildEmptyStateContent() {
+    return Center(
         child: Padding(
           padding: const EdgeInsets.all(40.0),
           child: Column(
@@ -211,43 +141,26 @@ class _FavoritosScreenState extends State<FavoritosScreen> {
                   height: 1.5,
                 ),
               ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.3),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: MiTema.azul,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  elevation: 5,
-                ),
-                child: const Text('EXPLORAR AHORA', style: TextStyle(fontWeight: FontWeight.bold)),
-              ).animate().fadeIn(delay: 800.ms).scale(),
             ],
           ),
         ),
-      ),
     );
   }
 
-  Widget _buildFavoritesGrid() {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      sliver: SliverGrid(
+  Widget _buildFavoritesGridContent() {
+    return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           childAspectRatio: 0.68,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
         ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final inmueble = _favoritos[index];
-            return _buildFavoriteCard(inmueble, index);
-          },
-          childCount: _favoritos.length,
-        ),
-      ),
+        itemBuilder: (context, index) {
+          final inmueble = _favoritos[index];
+          return _buildFavoriteCard(inmueble, index);
+        },
+        itemCount: _favoritos.length,
     );
   }
 

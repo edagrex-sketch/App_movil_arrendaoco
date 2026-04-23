@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:intl/intl.dart';
+import 'package:arrendaoco/view/arrendador.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 
@@ -81,13 +82,17 @@ class _VerContratoSolicitudScreenState extends State<VerContratoSolicitudScreen>
           );
 
           if (success == true && mounted) {
+            final esPropietario = SesionActual.esPropietario;
+            
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(
-                builder: (context) => InquilinoHomeScreen(
-                  usuarioId: SesionActual.usuarioId.toString(),
-                  initialIndex: 1, // Ir a Mis Rentas
-                ),
+                builder: (context) => esPropietario 
+                  ? ArrendadorScreen(usuarioId: SesionActual.usuarioId.toString())
+                  : InquilinoHomeScreen(
+                      usuarioId: SesionActual.usuarioId.toString(),
+                      initialIndex: 0, // Ir a Propiedades (Mis Rentas)
+                    ),
               ),
               (route) => false,
             );

@@ -5,6 +5,7 @@ class SesionActual {
   static String rol = '';
   static List<String> todosLosRoles = [];
   static String? publicId; // ID corto de 4 dígitos
+  static bool stripeOnboardingCompleted = false;
 
   static bool get esPropietario {
     final validRoles = ['arrendador', 'propietario', 'admin', 'administrador'];

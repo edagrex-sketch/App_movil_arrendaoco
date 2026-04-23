@@ -12,12 +12,15 @@ import 'package:arrendaoco/view/mis_rentas.dart';
 import 'package:arrendaoco/view/editar_perfil.dart';
 import 'package:arrendaoco/model/sesion_actual.dart';
 import 'package:arrendaoco/widgets/lottie_loading.dart';
+import 'package:arrendaoco/services/notificaciones_service.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
 import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/services/auth_service.dart';
-import 'package:arrendaoco/view/chat_lista.dart';
+import 'package:arrendaoco/view/chats/chat_list_screen.dart';
+import 'package:arrendaoco/view/favoritos.dart';
 import 'package:arrendaoco/view/inquilino_home.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 
 class PerfilScreen extends StatefulWidget {
@@ -32,9 +35,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
   final AuthService _auth = AuthService();
   bool _notificacionesActivas = true;
   bool _isLoading = true;
+  int _photoVersion = DateTime.now().millisecondsSinceEpoch;
   Map<String, dynamic>? _userData;
   int _favoritosCount = 0;
   int _inmueblesCount = 0;
+  int _rentasCount = 0;
 
   @override
   void initState() {
@@ -58,15 +63,24 @@ class _PerfilScreenState extends State<PerfilScreen> {
         }
       }
 
+      int rentasCount = 0;
+      final rentasRes = await _api.get('/contratos');
+      if (rentasRes.statusCode == 200) {
+        rentasCount = (rentasRes.data['data'] as List).length;
+      }
+
       if (mounted) {
         setState(() {
           if (userRes.statusCode == 200) {
             _userData = userRes.data['data'];
+            SesionActual.stripeOnboardingCompleted = _userData?['stripe_onboarding_completed'] ?? false;
+            _photoVersion = DateTime.now().millisecondsSinceEpoch;
           }
           if (favsRes.statusCode == 200) {
             _favoritosCount = (favsRes.data['data'] as List).length;
           }
           _inmueblesCount = inmueblesCount;
+          _rentasCount = rentasCount;
           _isLoading = false;
         });
       }
@@ -104,11 +118,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
           setState(() {
             SesionActual.rol = userData['rol'] ?? 'arrendador';
             SesionActual.todosLosRoles = List<String>.from(userData['roles'] ?? []);
+            SesionActual.stripeOnboardingCompleted = userData['stripe_onboarding_completed'] ?? false;
           });
           
           if (mounted) {
             await LottieFeedback.showSuccess(context, message: res.data['message'] ?? '¡Ya eres arrendador!');
-            _refreshData();
+            if (mounted) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => InquilinoHomeScreen(usuarioId: SesionActual.usuarioId ?? '')),
+                (route) => false,
+              );
+            }
           }
         } else {
           if (mounted) LottieFeedback.showError(context, message: res.data['message'] ?? 'No se pudo actualizar el rol');
@@ -118,6 +139,73 @@ class _PerfilScreenState extends State<PerfilScreen> {
           LottieLoading.hideLoadingDialog(context);
           LottieFeedback.showError(context, message: 'Error de conexión: $e');
         }
+      }
+    }
+  }
+
+  Future<void> _vincularCuentaStripe() async {
+    LottieLoading.showLoadingDialog(context, message: 'Generando enlace seguro...');
+    try {
+      final res = await _api.get('/stripe/onboarding-link');
+      if (mounted) LottieLoading.hideLoadingDialog(context);
+
+      if (res.statusCode == 200 && res.data['url'] != null) {
+        final url = Uri.parse(res.data['url']);
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+          // Mostrar un diálogo para que el usuario verifique cuando regrese
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('Configuración en curso'),
+                content: const Text('¿Has completado la vinculación en la página de Stripe?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Aún no')),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _verificarEstadoStripe();
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: MiTema.azul, foregroundColor: Colors.white),
+                    child: const Text('Sí, verificar ya'),
+                  ),
+                ],
+              ),
+            );
+          }
+        } else {
+          if (mounted) LottieFeedback.showError(context, message: 'No se pudo abrir el navegador.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        LottieLoading.hideLoadingDialog(context);
+        LottieFeedback.showError(context, message: 'Error al conectar con Stripe: $e');
+      }
+    }
+  }
+
+  Future<void> _verificarEstadoStripe() async {
+    LottieLoading.showLoadingDialog(context, message: 'Verificando con Stripe...');
+    try {
+      final res = await _api.get('/stripe/check-status');
+      if (mounted) LottieLoading.hideLoadingDialog(context);
+
+      if (res.statusCode == 200) {
+        final completed = res.data['completed'] ?? false;
+        if (completed) {
+          setState(() => SesionActual.stripeOnboardingCompleted = true);
+          if (mounted) await LottieFeedback.showSuccess(context, message: '¡Cuenta vinculada con éxito!');
+        } else {
+          if (mounted) LottieFeedback.showError(context, message: 'La configuración parece no estar completa todavía.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        LottieLoading.hideLoadingDialog(context);
+        LottieFeedback.showError(context, message: 'Error de verificación: $e');
       }
     }
   }
@@ -168,6 +256,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 }
 
                 String? fotoPerfilUrl = _userData?['foto_perfil'];
+                if (fotoPerfilUrl != null && fotoPerfilUrl.isNotEmpty) {
+                  fotoPerfilUrl = '$fotoPerfilUrl?v=$_photoVersion';
+                }
                 String displayName = _userData?['nombre'] ?? SesionActual.nombre;
                 SesionActual.nombre = displayName;
 
@@ -200,15 +291,6 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white24)),
                           child: Text(SesionActual.esPropietario ? 'INQUILINO / ARRENDADOR' : SesionActual.rol.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                         ),
-                        if (!SesionActual.esPropietario)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: ElevatedButton(
-                              onPressed: _ascenderAArrendador,
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-                              child: const Text('QUIERO PUBLICAR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -222,43 +304,197 @@ class _PerfilScreenState extends State<PerfilScreen> {
             sliver: SliverToBoxAdapter(
               child: Row(
                 children: [
-                  Expanded(child: _StatCard(icon: Icons.favorite_rounded, title: 'Favoritos', value: '$_favoritosCount', color: MiTema.rojo)),
-                  Expanded(child: _StatCard(icon: Icons.home_work_rounded, title: 'Publicados', value: '$_inmueblesCount', color: MiTema.vino)),
+                  Expanded(child: _StatCard(icon: Icons.favorite_rounded, title: 'Favoritos', value: '$_favoritosCount', color: MiTema.rojo, onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                      appBar: AppBar(title: const Text('Mis Favoritos'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                      body: FavoritosScreen(),
+                    )));
+                  })),
                   const SizedBox(width: 12),
-                  Expanded(child: _StatCard(icon: Icons.chat_bubble_rounded, title: 'Mensajes', value: '0', color: MiTema.celeste, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatListaScreen())))),
+                  if (SesionActual.esPropietario) ...[
+                    Expanded(child: _StatCard(icon: Icons.home_work_rounded, title: 'Publicados', value: '$_inmueblesCount', color: MiTema.vino)),
+                  ] else ...[
+                    Expanded(child: _StatCard(icon: Icons.key_rounded, title: 'Rentas', value: '$_rentasCount', color: MiTema.vino, onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                        appBar: AppBar(title: const Text('Mis Rentas'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                        body: const MisRentasScreen(),
+                      )));
+                    })),
+                  ],
+                  const SizedBox(width: 12),
+                  Expanded(child: _StatCard(icon: Icons.chat_bubble_rounded, title: 'Mensajes', value: '0', color: MiTema.celeste, onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                      appBar: AppBar(title: const Text('Mensajes'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                      body: ChatListScreen(),
+                    )));
+                  })),
                 ],
               ),
             ),
           ),
+          if (!SesionActual.esPropietario)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: StunningCard(
+                    onTap: _ascenderAArrendador,
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.campaign_rounded, color: Colors.red),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('¿Quieres ser arrendador?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text('Publica tus inmuebles y gestiona rentas.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
           if (SesionActual.esPropietario)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               sliver: SliverToBoxAdapter(
-                child: StunningCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [Icon(Icons.real_estate_agent_rounded, color: MiTema.azul), const SizedBox(width: 12), Text('Panel Arrendador', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: MiTema.azul))]),
-                      const SizedBox(height: 16),
-                      Row(
+                child: Column(
+                  children: [
+                    if (!SesionActual.stripeOnboardingCompleted)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF003049), Color(0xFF002030)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF003049).withOpacity(0.3),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  right: -20,
+                                  top: -20,
+                                  child: Icon(
+                                    Icons.account_balance_wallet_rounded,
+                                    size: 150,
+                                    color: Colors.white.withOpacity(0.05),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 24),
+                                          ),
+                                          const SizedBox(width: 15),
+                                          const Expanded(
+                                            child: Text(
+                                              '¡Configuración pendiente!',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'Necesitas vincular una cuenta bancaria con Stripe para recibir tus pagos. Sin esto, no podrás publicar inmuebles.',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                          height: 1.5,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: _vincularCuentaStripe,
+                                          icon: const Icon(Icons.link_rounded),
+                                          label: const Text('VINCULAR CUENTA AHORA', style: TextStyle(fontWeight: FontWeight.w900)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFFC1121F),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 16),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                                            elevation: 0,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    StunningCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(child: _QuickActionButton(icon: Icons.add_home_work_rounded, label: 'Publicar', gradient: AppGradients.accentGradient, onTap: () async {
-                            final pid = SesionActual.usuarioId ?? '';
-                            if (pid.isNotEmpty) {
-                              final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => RegistrarInmuebleScreen(propietarioId: pid)));
-                              if (res == true) _refreshData();
-                            }
-                          })),
-                          const SizedBox(width: 12),
-                          Expanded(child: _QuickActionButton(icon: Icons.dashboard_customize_rounded, label: 'Gestionar', gradient: AppGradients.primaryGradient, onTap: () {
-                            final uid = SesionActual.usuarioId ?? '';
-                            if (uid.isNotEmpty) Navigator.push(context, MaterialPageRoute(builder: (context) => ArrendadorScreen(usuarioId: uid)));
-                          })),
+                          Row(children: [Icon(Icons.real_estate_agent_rounded, color: MiTema.azul), const SizedBox(width: 12), Text('Panel Arrendador', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: MiTema.azul))]),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(child: _QuickActionButton(icon: Icons.add_home_work_rounded, label: 'Publicar', gradient: SesionActual.stripeOnboardingCompleted ? AppGradients.accentGradient : const LinearGradient(colors: [Colors.grey, Colors.blueGrey]), onTap: () async {
+                                if (!SesionActual.stripeOnboardingCompleted) {
+                                  _vincularCuentaStripe();
+                                  return;
+                                }
+                                final pid = SesionActual.usuarioId ?? '';
+                                if (pid.isNotEmpty) {
+                                  final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => RegistrarInmuebleScreen(propietarioId: pid)));
+                                  if (res == true) _refreshData();
+                                }
+                              })),
+                              const SizedBox(width: 12),
+                              Expanded(child: _QuickActionButton(icon: Icons.dashboard_customize_rounded, label: 'Gestionar', gradient: AppGradients.primaryGradient, onTap: () {
+                                final uid = SesionActual.usuarioId ?? '';
+                                if (uid.isNotEmpty) Navigator.push(context, MaterialPageRoute(builder: (context) => ArrendadorScreen(usuarioId: uid)));
+                              })),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -272,12 +508,32 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
-                      _SettingsTile(icon: Icons.person_rounded, title: 'Editar perfil', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditarPerfilScreen()))),
-                      _SettingsTile(icon: Icons.key_rounded, title: 'Mis Rentas', onTap: () {
-                        if (SesionActual.esPropietario) Navigator.push(context, MaterialPageRoute(builder: (context) => const GestionarRentasScreen()));
-                        else Navigator.push(context, MaterialPageRoute(builder: (context) => const MisRentasScreen()));
+                      _SettingsTile(icon: Icons.person_rounded, title: 'Editar perfil', onTap: () async {
+                        final res = await Navigator.push(context, MaterialPageRoute(builder: (context) => const EditarPerfilScreen()));
+                        if (res == true) _refreshData();
                       }),
-                      _SettingsTile(icon: Icons.chat_bubble_rounded, title: 'Mensajes', showDivider: false, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatListaScreen()))),
+                      _SettingsTile(icon: Icons.key_rounded, title: 'Mi Renta', onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                          appBar: AppBar(title: const Text('Mi Renta'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                          body: const MisRentasScreen(),
+                        )));
+                      }),
+                      _SettingsTile(icon: Icons.favorite_rounded, title: 'Favoritos', onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                          appBar: AppBar(title: const Text('Mis Favoritos'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                          body: FavoritosScreen(),
+                        )));
+                      }),
+                      _SettingsTile(icon: Icons.chat_bubble_rounded, title: 'Mensajes', showDivider: SesionActual.esPropietario, onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => Scaffold(
+                          appBar: AppBar(title: const Text('Mensajes'), flexibleSpace: Container(decoration: const BoxDecoration(gradient: AppGradients.primaryGradient))),
+                          body: ChatListScreen(),
+                        )));
+                      }),
+                      if (SesionActual.esPropietario)
+                         _SettingsTile(icon: Icons.assignment_rounded, title: 'Gestión de Rentas', showDivider: false, onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => GestionarRentasScreen()));
+                         }),
                     ],
                   ),
                 ),
@@ -287,7 +543,19 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
-                      _SettingsTile(icon: Icons.notifications_active_rounded, title: 'Notificaciones', showDivider: false, trailing: Switch(value: _notificacionesActivas, activeColor: MiTema.celeste, onChanged: (v) => setState(() => _notificacionesActivas = v))),
+                      _SettingsTile(icon: Icons.notifications_active_rounded, title: 'Notificaciones', showDivider: true, trailing: Switch(value: _notificacionesActivas, activeColor: MiTema.celeste, onChanged: (v) => setState(() => _notificacionesActivas = v))),
+                      _SettingsTile(
+                        icon: Icons.notification_important_rounded, 
+                        title: 'Probar Notificación 🔔', 
+                        showDivider: false, 
+                        onTap: () async {
+                          await NotificacionesService.mostrarNotificacion(
+                            titulo: 'ArrendaOco Test',
+                            cuerpo: '¡Funciona! Esta es una notificación de alta prioridad tipo WhatsApp.',
+                            groupKey: 'test_group',
+                          );
+                        }
+                      ),
                     ],
                   ),
                 ),

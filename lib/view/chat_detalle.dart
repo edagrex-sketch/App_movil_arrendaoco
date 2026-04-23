@@ -140,11 +140,23 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
-                    final bool esMio = data['sender_id'] == SesionActual.usuarioId;
+                    
+                    // Manejo robusto de IDs (pueden venir como int o string)
+                    final String? senderId = data['sender_id']?.toString();
+                    final bool esMio = senderId == SesionActual.usuarioId?.toString();
+                    
                     final String texto = data['text'] ?? '';
-                    final Timestamp? time = data['created_at'];
+                    
+                    // Manejo robusto de fechas (pueden venir como Timestamp o String RFC3339)
+                    DateTime? date;
+                    final dynamic rawDate = data['created_at'];
+                    if (rawDate is Timestamp) {
+                      date = rawDate.toDate();
+                    } else if (rawDate is String) {
+                      date = DateTime.tryParse(rawDate);
+                    }
 
-                    return _buildMessageBubble(texto, esMio, time)
+                    return _buildMessageBubble(texto, esMio, date)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .slideX(begin: esMio ? 0.2 : -0.2, curve: Curves.easeOutCubic);
@@ -161,8 +173,8 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     );
   }
 
-  Widget _buildMessageBubble(String text, bool esMio, Timestamp? time) {
-    final String hora = time != null ? DateFormat('HH:mm').format(time.toDate()) : '';
+  Widget _buildMessageBubble(String text, bool esMio, DateTime? time) {
+    final String hora = time != null ? DateFormat('HH:mm').format(time) : '';
 
     return Align(
       alignment: esMio ? Alignment.centerRight : Alignment.centerLeft,

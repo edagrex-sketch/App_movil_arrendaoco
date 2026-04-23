@@ -101,29 +101,20 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen>
     LottieLoading.showLoadingDialog(context, message: 'Actualizando perfil...');
 
     try {
-      String? nuevaUrlFoto;
-
-      if (_nuevaFoto != null) {
-        nuevaUrlFoto = await _storageService.uploadProfilePhoto(
-          userId: uid.toString(),
-          imageFile: _nuevaFoto!,
-        );
-      }
-
       final Map<String, dynamic> datos = {
         'nombre': _nombreController.text.trim(),
+        if (_passwordController.text.isNotEmpty) 'password': _passwordController.text,
       };
 
-      if (nuevaUrlFoto != null) {
-        datos['foto_perfil'] = nuevaUrlFoto;
+      final res = await BaseDatos.actualizarUsuario(
+        uid, 
+        datos, 
+        imagePath: _nuevaFoto?.path
+      );
+      
+      if (res != null) {
+        SesionActual.nombre = res['nombre'] ?? SesionActual.nombre;
       }
-
-      if (_passwordController.text.isNotEmpty) {
-        datos['password'] = _passwordController.text;
-      }
-
-      await BaseDatos.actualizarUsuario(uid, datos);
-      SesionActual.nombre = datos['nombre'];
 
       if (!mounted) return;
       LottieLoading.hideLoadingDialog(context);

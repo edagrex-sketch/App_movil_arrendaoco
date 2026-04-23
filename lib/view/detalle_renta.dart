@@ -9,6 +9,12 @@ import 'package:arrendaoco/theme/arrenda_colors.dart';
 import 'dart:async';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/view/solicitudes_renta_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:arrendaoco/services/api_service.dart';
+import 'package:arrendaoco/services/pusher_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DetalleRentaScreen extends StatefulWidget {
   final String rentaId;
@@ -65,7 +71,8 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
             return const Center(child: Text('Renta no encontrada'));
           }
 
-          final esArrendador = usuarioId?.toString() == renta['arrendador_id']?.toString();
+          final esArrendador = (usuarioId?.toString() == renta['arrendador_id']?.toString()) ||
+                               (usuarioId?.toString() == renta['propietario_id']?.toString());
           final montoRaw = renta['monto_mensual'];
           final monto = double.tryParse(montoRaw?.toString() ?? '0') ?? 0.0;
           final diaPago = renta['dia_pago'] ?? 5;
@@ -161,7 +168,17 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
                             children: [
                               Icon(estado == 'activa' ? Icons.check_circle_rounded : Icons.info_outline_rounded, color: estado == 'activa' ? Colors.green : Colors.grey, size: 20),
                               const SizedBox(width: 8),
-                              Text('Estado: ${estado.toUpperCase()}', style: TextStyle(fontWeight: FontWeight.bold, color: estado == 'activa' ? Colors.green : Colors.grey[700])),
+                              Text(
+                                 'Estado: ${
+                                   estado == 'activa' || estado == 'activo' ? 'ACTIVA' : 
+                                   estado == 'pendiente_aprobacion' ? 'PENDIENTE DE APROBACIÓN' :
+                                   estado == 'disponible' ? 'ESPERANDO FIRMA' :
+                                   estado == 'pdf_descargado' ? 'PAGO RETENIDO' :
+                                   estado == 'finalizada' || estado == 'finalizado' ? 'FINALIZADA' :
+                                   estado == 'rechazada' || estado == 'rechazado' ? 'RECHAZADA' : estado.toUpperCase()
+                                 }', 
+                                 style: TextStyle(fontWeight: FontWeight.bold, color: estado == 'activa' || estado == 'activo' ? Colors.green : Colors.grey[700])
+                               ),
                             ],
                           ),
                         ),
@@ -210,7 +227,8 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
 
   Widget _buildControlPanel(BuildContext context, Map<String, dynamic> renta) {
     final estado = renta['estado'] ?? 'pendiente_aprobacion';
-    final esArrendador = SesionActual.usuarioId?.toString() == renta['arrendador_id']?.toString();
+    final esArrendador = (SesionActual.usuarioId?.toString() == renta['arrendador_id']?.toString()) ||
+                         (SesionActual.usuarioId?.toString() == renta['propietario_id']?.toString());
 
     if (!esArrendador) return _buildTenantStatus(estado);
 
@@ -220,9 +238,9 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
         Text('Gestión de Solicitud', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: ArrendaColors.primary)),
         const SizedBox(height: 16),
         if (estado == 'pendiente_aprobacion') _buildStep1(renta),
-        if (estado == 'pendiente_firma') _buildStep2(renta),
-        if (estado == 'pendiente_activacion') _buildStep3(renta),
-        if (estado == 'activa') _buildActiveStatus(),
+        if (estado == 'disponible') _buildStep2(renta),
+        if (estado == 'pdf_descargado') _buildStep3(renta),
+        if (estado == 'activa' || estado == 'activo') _buildActiveStatus(),
       ],
     );
   }
@@ -246,7 +264,7 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: ElevatedButton.icon(onPressed: _procesando ? null : () => _procesarSolicitud(context, renta['id'], 'pendiente_firma'), icon: const Icon(Icons.check), label: const Text('APROBAR'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white))),
+            Expanded(child: ElevatedButton.icon(onPressed: _procesando ? null : () => _procesarSolicitud(context, renta['id'], 'aprobado'), icon: const Icon(Icons.check), label: const Text('APROBAR'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white))),
             const SizedBox(width: 12),
             Expanded(child: OutlinedButton.icon(onPressed: _procesando ? null : () => _procesarSolicitud(context, renta['id'], 'rechazada'), icon: const Icon(Icons.close), label: const Text('RECHAZAR'), style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)))),
           ],
@@ -265,6 +283,16 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
         const Text('Una vez firmado, súbelo aquí:', style: TextStyle(fontSize: 12, color: Colors.grey)),
         const SizedBox(height: 8),
         ElevatedButton.icon(onPressed: () => _subirContrato(renta['id']), icon: const Icon(Icons.upload_file), label: const Text('SUBIR CONTRATO FIRMADO'), style: ElevatedButton.styleFrom(backgroundColor: ArrendaColors.accent)),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _procesarSolicitud(context, renta['id'], 'pdf_descargado'),
+            icon: const Icon(Icons.verified_rounded),
+            label: const Text('CONFIRMAR FIRMA Y CONTINUAR'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
+          ),
+        ),
       ],
     );
   }
@@ -294,7 +322,13 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
     try {
       await BaseDatos.actualizarEstadoRenta(int.parse(id.toString()), nuevoEstado);
       if (mounted) {
-        LottieFeedback.showSuccess(context, message: 'Estado actualizado: $nuevoEstado');
+        String msg = 'Estado actualizado';
+        if (nuevoEstado == 'aprobado' || nuevoEstado == 'disponible') msg = '¡Aprobado! Ahora el inquilino debe firmar el contrato.';
+        if (nuevoEstado == 'rechazada' || nuevoEstado == 'rechazado') msg = 'Solicitud rechazada correctamente.';
+        if (nuevoEstado == 'activa' || nuevoEstado == 'activo') msg = '¡Renta activada con éxito!';
+        if (nuevoEstado == 'pdf_descargado') msg = '¡Contrato firmado! El pago inicial ha sido validado.';
+        
+        LottieFeedback.showSuccess(context, message: msg);
         setState(() {
           _futureRenta = BaseDatos.obtenerRentaPorId(int.parse(id.toString()));
           _procesando = false;
@@ -307,11 +341,60 @@ class _DetalleRentaScreenState extends State<DetalleRentaScreen> {
   }
 
   Future<void> _descargarContrato(dynamic id) async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Iniciando descarga de contrato...')));
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    // Intentar abrir con el token en la URL si el backend lo soporta, o simplemente abrir la URL
+    // Nota: Para una descarga protegida real en móvil, se prefiere descargar con Dio y guardar.
+    final url = Uri.parse('${ApiService.defaultBaseUrl}/contratos/$id/descargar-pdf?token=$token');
+    
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abriendo contrato en el navegador...')));
+    
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo abrir la URL')));
+      }
+    }
   }
 
   Future<void> _subirContrato(dynamic id) async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abriendo selector de archivos...')));
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    
+    if (image == null) return;
+
+    setState(() => _procesando = true);
+    
+    try {
+      final ApiService api = ApiService();
+      final formData = FormData.fromMap({
+        'archivo': await MultipartFile.fromFile(image.path, filename: 'contrato_$id.jpg'),
+      });
+      
+      final response = await api.post('/contratos/$id/subir-firmado', data: formData);
+      
+      if (mounted) {
+        if (response.statusCode == 200) {
+          LottieFeedback.showSuccess(context, message: '¡Contrato subido y activado!');
+          setState(() {
+            _futureRenta = BaseDatos.obtenerRentaPorId(int.parse(id.toString()));
+            _procesando = false;
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al subir el archivo')));
+          setState(() => _procesando = false);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _procesando = false);
+      }
+    }
   }
 
   Widget _buildInfoCard({required IconData icon, required String label, required String value, required Color color, bool fullWidth = false}) {

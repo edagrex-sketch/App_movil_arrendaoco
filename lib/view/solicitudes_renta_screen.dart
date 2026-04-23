@@ -4,6 +4,8 @@ import 'package:arrendaoco/services/api_service.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/view/widgets/imagen_dinamica.dart';
 import 'package:arrendaoco/utils/casting.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SolicitudesRentaScreen extends StatefulWidget {
   const SolicitudesRentaScreen({super.key});
@@ -30,9 +32,13 @@ class _SolicitudesRentaScreenState extends State<SolicitudesRentaScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data['data'] ?? [];
         // Filtrar solo las solicitudes pendientes donde YO soy el arrendador
+        final myId = SesionActual.usuarioId ?? '0';
+        
         setState(() {
           _solicitudes = List<Map<String, dynamic>>.from(data).where((c) {
-            return c['estado'] == 'pendiente_aprobacion';
+            final isOwner = c['arrendador_id'].toString() == myId.toString() ||
+                            c['propietario_id'].toString() == myId.toString();
+            return (c['estado'] == 'pendiente_aprobacion' || c['estado'] == 'pendiente') && isOwner;
           }).toList();
           _isLoading = false;
         });
@@ -50,8 +56,8 @@ class _SolicitudesRentaScreenState extends State<SolicitudesRentaScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(nuevoEstado == 'activo' ? '¡Solicitud Aceptada!' : 'Solicitud Rechazada'),
-              backgroundColor: nuevoEstado == 'activo' ? Colors.green : Colors.red,
+              content: Text(nuevoEstado == 'activa' ? '¡Solicitud Aceptada!' : 'Solicitud Rechazada'),
+              backgroundColor: nuevoEstado == 'activa' ? Colors.green : Colors.red,
             ),
           );
           _cargarSolicitudes();
@@ -134,7 +140,7 @@ class _SolicitudesRentaScreenState extends State<SolicitudesRentaScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => _gestionarSolicitud(sol['id'], 'rechazado'),
+                      onPressed: () => _gestionarSolicitud(sol['id'], 'rechazada'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
@@ -146,7 +152,7 @@ class _SolicitudesRentaScreenState extends State<SolicitudesRentaScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _gestionarSolicitud(sol['id'], 'activo'),
+                      onPressed: () => _gestionarSolicitud(sol['id'], 'activa'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,

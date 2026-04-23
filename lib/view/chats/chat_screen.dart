@@ -31,6 +31,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
+  Map<String, dynamic> _otroUsuarioActual = {};
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
@@ -41,10 +42,42 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _otroUsuarioActual = Map<String, dynamic>.from(widget.otroUsuario);
     _fullInmueble = widget.inmueble;
+    
     _fetchMessages();
     _fetchPropertyDetails();
     _setupFirebase();
+
+    // Si el nombre es genérico o falta info, intentamos traer los detalles del chat
+    if (_otroUsuarioActual['nombre'] == 'Usuario' || _otroUsuarioActual['nombre'] == null) {
+      _fetchChatInfo();
+    }
+  }
+
+  Future<void> _fetchChatInfo() async {
+    try {
+      final response = await _api.get('/chats');
+      if (response.statusCode == 200) {
+        final List<dynamic> chats = response.data['data'] ?? [];
+        final chatInfo = chats.firstWhere(
+          (c) => c['id'].toString() == widget.chatId.toString(),
+          orElse: () => null,
+        );
+
+        if (chatInfo != null && mounted) {
+          setState(() {
+            _otroUsuarioActual = Map<String, dynamic>.from(chatInfo['otro_usuario']);
+            if (_fullInmueble == null && chatInfo['inmueble'] != null) {
+              _fullInmueble = chatInfo['inmueble'];
+              _fetchPropertyDetails();
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error recuperando info del chat: $e');
+    }
   }
 
   Future<void> _fetchPropertyDetails() async {
@@ -221,11 +254,11 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: ImagenDinamica(
-                  ruta: widget.otroUsuario['foto_perfil'] ?? 
-                        widget.otroUsuario['avatar'] ?? 
-                        widget.otroUsuario['perfil_foto'] ?? 
-                        widget.otroUsuario['foto'] ?? '',
-                  nombre: widget.otroUsuario['nombre'] ?? 'U',
+                  ruta: _otroUsuarioActual['foto_perfil'] ?? 
+                        _otroUsuarioActual['avatar'] ?? 
+                        _otroUsuarioActual['perfil_foto'] ?? 
+                        _otroUsuarioActual['foto'] ?? '',
+                  nombre: _otroUsuarioActual['nombre'] ?? 'U',
                   width: 40,
                   height: 40,
                 ),
@@ -236,7 +269,7 @@ class _ChatScreenState extends State<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.otroUsuario['nombre'] ?? 'Usuario',
+                  _otroUsuarioActual['nombre'] ?? 'Cargando...',
                   style: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 Text('En línea', style: TextStyle(color: Colors.green[600], fontSize: 12)),
@@ -441,11 +474,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: ImagenDinamica(
-                      ruta: widget.otroUsuario['foto_perfil'] ?? 
-                            widget.otroUsuario['avatar'] ?? 
-                            widget.otroUsuario['perfil_foto'] ?? 
-                            widget.otroUsuario['foto'] ?? '',
-                      nombre: widget.otroUsuario['nombre'] ?? 'U',
+                      ruta: _otroUsuarioActual['foto_perfil'] ?? 
+                            _otroUsuarioActual['avatar'] ?? 
+                            _otroUsuarioActual['perfil_foto'] ?? 
+                            _otroUsuarioActual['foto'] ?? '',
+                      nombre: _otroUsuarioActual['nombre'] ?? 'U',
                       width: 24,
                       height: 24,
                     ),

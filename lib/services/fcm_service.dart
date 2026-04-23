@@ -50,31 +50,9 @@ class FCMService {
           if (_fcmToken != null) {
             await _actualizarTokenEnLaravel(usuarioId, _fcmToken!);
           }
-
-          // Listeners Firebase
-          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-            print(
-              '🔔 (FCM) Mensaje recibido en foreground: ${message.messageId}',
-            );
-
-            if (message.notification != null) {
-              // Intentar obtener una clave de grupo (ID del chat o del remitente)
-              final groupKey = message.data['chat_id']?.toString() ?? 
-                               message.data['sender_id']?.toString();
-
-              NotificacionesService.mostrarNotificacion(
-                titulo: message.notification!.title ?? 'Notificación',
-                cuerpo: message.notification!.body ?? '',
-                groupKey: groupKey,
-                payload: message.data.toString(),
-              );
-            }
-          });
-
-          // Background
-          FirebaseMessaging.onBackgroundMessage(
-            _firebaseMessagingBackgroundHandler,
-          );
+          
+          // NOTA: Los listeners de mensajes (foreground/background) ya están 
+          // centralizados en NotificacionesService para evitar duplicados.
         } else {
           print('❌ Permisos FCM denegados.');
         }

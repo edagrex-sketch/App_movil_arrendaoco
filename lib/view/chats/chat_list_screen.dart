@@ -43,40 +43,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: const Text(
-          'Mensajes',
-          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
-        ),
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: AppGradients.primaryGradient,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
-            ),
-          ),
-        ),
-        elevation: 0,
+    if (_isLoading) return _buildShimmer();
+    if (_chats.isEmpty) return _buildEmptyState();
+    return RefreshIndicator(
+      onRefresh: _fetchChats,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(0, 20, 0, 100),
+        itemCount: _chats.length,
+        itemBuilder: (context, index) {
+          final chat = _chats[index];
+          return _buildChatTile(chat);
+        },
       ),
-      body: _isLoading
-          ? _buildShimmer()
-          : _chats.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _fetchChats,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    itemCount: _chats.length,
-                    itemBuilder: (context, index) {
-                      final chat = _chats[index];
-                      return _buildChatTile(chat);
-                    },
-                  ),
-                ),
     );
   }
 

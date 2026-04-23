@@ -47,6 +47,8 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   const MyApp({super.key});
 
   @override
@@ -55,6 +57,7 @@ class MyApp extends StatelessWidget {
       listenable: ThemeManager(),
       builder: (context, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey, // ASIGNAR EL KEY GLOBAL
           debugShowCheckedModeBanner: false,
           title: 'ArrendaOco',
           theme: MiTema.lightTheme(context),

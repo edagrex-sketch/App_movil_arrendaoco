@@ -67,12 +67,13 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     final uid = int.tryParse(usuarioId ?? '0') ?? 0;
 
     try {
-      final rentas = await BaseDatos.obtenerRentasPorInquilino(uid);
+      final allRentas = await BaseDatos.obtenerRentasPorInquilino(uid);
       final eventos = await BaseDatos.obtenerEventosPorUsuario(uid);
 
       if (mounted) {
         setState(() {
-          _rentas = rentas;
+          // Solo mostrar rentas donde soy el inquilino
+          _rentas = allRentas.where((r) => r['inquilino_id'].toString() == uid.toString()).toList();
           _eventos = eventos;
           _isLoading = false;
         });
@@ -95,12 +96,14 @@ class _MisRentasScreenState extends State<MisRentasScreen> {
     final solicitudes = _rentas
         .where((r) => 
           r['estado'] == 'pendiente_aprobacion' || 
+          r['estado'] == 'disponible' ||
+          r['estado'] == 'pdf_descargado' ||
           r['estado'] == 'esperando_pago' ||
           r['estado'] == 'pendiente'
         )
         .toList();
         
-    final activas = _rentas.where((r) => r['estado'] == 'activa').toList();
+    final activas = _rentas.where((r) => r['estado'] == 'activa' || r['estado'] == 'activo').toList();
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),

@@ -16,14 +16,25 @@ class BaseDatos {
     }
   }
 
-  static Future<void> actualizarUsuario(
+  static Future<Map<String, dynamic>?> actualizarUsuario(
     int id,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    String? imagePath,
+  }) async {
     try {
-      await _api.post('/perfil/actualizar', data: data);
+      final formData = FormData.fromMap(data);
+      if (imagePath != null) {
+        formData.files.add(MapEntry(
+          'foto_perfil',
+          await MultipartFile.fromFile(imagePath),
+        ));
+      }
+
+      final response = await _api.post('/perfil/actualizar', data: formData);
+      return response.data['data'];
     } catch (e) {
       debugPrint('Error actualizando usuario: $e');
+      return null;
     }
   }
 

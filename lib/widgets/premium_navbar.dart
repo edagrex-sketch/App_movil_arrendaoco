@@ -19,10 +19,11 @@ class PremiumFloatingNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool manyItems = items.length > 5;
     
     return Container(
       height: 70,
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 30),
+      margin: EdgeInsets.fromLTRB(manyItems ? 12 : 24, 0, manyItems ? 12 : 24, 30),
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(30),
@@ -59,7 +60,9 @@ class PremiumFloatingNavBar extends StatelessWidget {
                     duration: const Duration(milliseconds: 400),
                     curve: Curves.easeOutBack,
                     padding: EdgeInsets.symmetric(
-                      horizontal: isSelected ? 20 : 12,
+                      horizontal: isSelected 
+                        ? (manyItems ? 12 : 20) 
+                        : (manyItems ? 8 : 12),
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
@@ -76,7 +79,7 @@ class PremiumFloatingNavBar extends StatelessWidget {
                           color: isSelected 
                             ? MiTema.azul 
                             : Colors.grey[500],
-                          size: 26,
+                          size: manyItems ? 22 : 26,
                         ).animate(target: isSelected ? 1 : 0)
                          .scale(begin: const Offset(1, 1), end: const Offset(1.15, 1.15))
                          .shimmer(delay: 400.ms, duration: 1000.ms),

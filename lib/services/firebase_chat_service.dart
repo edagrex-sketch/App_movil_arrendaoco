@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 class FirebaseChatService {
   static final FirebaseChatService _instance = FirebaseChatService._internal();
@@ -59,6 +60,30 @@ class FirebaseChatService {
     }
   }
 
+  // Stream para avisar a toda la app que debe refrescar sus datos
+  static final StreamController<String> _globalRefreshController = StreamController<String>.broadcast();
+  static Stream<String> get globalRefreshStream => _globalRefreshController.stream;
+
+  /// ESCUCHAR TODO: Monitorea cambios globales del usuario para refrescar cualquier pantalla
+  void subscribeToUserUpdates(int usuarioId) {
+    _firestore.collection('users').doc(usuarioId.toString()).snapshots().listen((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        
+        // Si hay un trigger de actualización global
+        if (data.containsKey('last_global_sync')) {
+          _globalRefreshController.add('refresh');
+        }
+
+        // Si hay una actualización de rentas específica
+        if (data.containsKey('last_rental_update')) {
+          final rentalData = data['last_rental_update'];
+          _globalRefreshController.add('renta_updated');
+        }
+      }
+    });
+  }
+
   /// ESCUCHAR ESTATUS DE INMUEBLES (Implementación vía Firebase)
   Future<void> listenToInmuebles({
     required Function(int inmuebleId, String estatus) onStatusChanged,
@@ -68,6 +93,7 @@ class FirebaseChatService {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         onStatusChanged(data['inmuebleId'] ?? 0, data['nuevoEstatus'] ?? '');
+        _globalRefreshController.add('inmueble_status_changed');
       }
     });
   }
@@ -121,6 +147,9 @@ class FirebaseChatService {
       'created_at': FieldValue.serverTimestamp(),
       'leido': false,
     });
+
+    // Avisar que hubo un cambio para refrescar contadores globalmente
+    _globalRefreshController.add('new_message');
   }
 
   String getChatId(String uid1, String uid2) {

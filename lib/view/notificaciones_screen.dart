@@ -5,6 +5,13 @@ import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:lottie/lottie.dart';
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/view/detalle_inmueble.dart';
+import 'package:arrendaoco/services/notificaciones_service.dart';
+import 'dart:async';
+import 'dart:convert'; // Para posibles payloads
+import 'package:arrendaoco/view/chats/chat_screen.dart';
+import 'package:arrendaoco/view/mis_rentas.dart';
+import 'package:arrendaoco/view/gestionar_rentas.dart';
+import 'package:arrendaoco/model/sesion_actual.dart';
 
 class NotificacionesScreen extends StatefulWidget {
   final int usuarioId;
@@ -20,6 +27,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
   bool _cargando = true;
   List<Map<String, dynamic>> _notificaciones = [];
   late AnimationController _controller;
+  StreamSubscription? _subscription;
 
   @override
   void initState() {
@@ -29,10 +37,16 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
       duration: const Duration(milliseconds: 800),
     );
     _cargarNotificaciones();
+
+    // Tiempo real: Escuchar si llega una nueva notificación mientras estamos aquí
+    _subscription = NotificacionesService.onNotificationReceived.listen((_) {
+      _cargarNotificaciones();
+    });
   }
 
   @override
   void dispose() {
+    _subscription?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -43,11 +57,10 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
       final data = await BaseDatos.obtenerNotificaciones(widget.usuarioId);
       if (mounted) {
         setState(() {
-          _notificaciones = data;
+          _notificaciones = data.where((n) => n['leida'] == false || n['leida'] == 0).toList();
           _cargando = false;
           _controller.forward(from: 0);
         });
-        _marcarTodasComoLeidas();
       }
     } catch (e) {
       if (mounted) setState(() => _cargando = false);
@@ -65,6 +78,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
       setState(() {
         _notificaciones.removeWhere((n) => n['id'] == id);
       });
+      NotificacionesService.refrescarBadge();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error al eliminar notificación')),
@@ -75,8 +89,19 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
   Future<void> _manejarTapNotificacion(Map<String, dynamic> notif) async {
     final tipo = notif['tipo'];
     final refId = notif['referencia_id'];
+    final id = notif['id'];
 
     print('🔵 Tap en notificación: Tipo=$tipo, RefId=$refId');
+
+    // MARCAR COMO LEÍDA Y QUITAR DE LA LISTA
+    if (id != null) {
+      BaseDatos.marcarComoLeida(id);
+      setState(() {
+        _notificaciones.removeWhere((n) => n['id'] == id);
+      });
+      // Notificar al badge
+      NotificacionesService.refrescarBadge();
+    }
 
     if (tipo == 'resena') {
       if (refId == null) {
@@ -169,6 +194,46 @@ class _NotificacionesScreenState extends State<NotificacionesScreen>
             const SnackBar(content: Text('Error al cargar la información')),
           );
         }
+      }
+    } else if (tipo == 'mensaje') {
+      final chatIdInt = int.tryParse(refId?.toString() ?? '');
+      if (chatIdInt != null) {
+        // En un escenario ideal, traeríamos los datos del chat. Por ahora, navegamos.
+        // Si no tenemos los datos del 'otroUsuario', el ChatScreen intentará cargarlos o fallará graciosamente.
+        // Mockup del otro usuario (se cargará por API en el initState del chat si falta algo)
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              chatId: chatIdInt,
+              otroUsuario: const {'nombre': 'Usuario'}, // Fallback
+            ),
+          ),
+        );
+      }
+    } else if (tipo == 'pago' || tipo == 'renta') {
+      if (SesionActual.esPropietario) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => GestionarRentasScreen()),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const MisRentasScreen()),
+        );
+      }
+    } else if (tipo == 'inmueble') {
+      final inmuebleId = int.tryParse(refId?.toString() ?? '');
+      if (inmuebleId != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DetalleInmuebleScreen(
+              inmueble: {'id': inmuebleId},
+            ),
+          ),
+        );
       }
     } else {
       // Feedback para otros tipos de notificaciones sin acción definida aún

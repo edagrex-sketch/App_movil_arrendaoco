@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:arrendaoco/theme/tema.dart';
 
 import 'package:arrendaoco/theme/app_gradients.dart';
 import 'package:arrendaoco/view/login.dart';
@@ -8,8 +9,7 @@ import 'package:arrendaoco/services/auth_service.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
-  final String rolInicial; // Recibe el rol elegido
-  const RegisterScreen({super.key, required this.rolInicial});
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -51,7 +51,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void initState() {
     super.initState();
-    _selectedRol = widget.rolInicial;
+    _selectedRol = 'inquilino';
 
     _entryController = AnimationController(
       vsync: this,

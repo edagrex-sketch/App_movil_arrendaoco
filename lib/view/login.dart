@@ -10,6 +10,7 @@ import 'package:arrendaoco/services/auth_service.dart';
 import 'package:arrendaoco/widgets/lottie_loading.dart';
 import 'package:arrendaoco/widgets/lottie_feedback.dart';
 import 'package:arrendaoco/services/fcm_service.dart';
+import 'package:arrendaoco/services/firebase_chat_service.dart';
 import 'package:arrendaoco/widgets/stunning_widgets.dart';
 import 'package:arrendaoco/theme/arrenda_colors.dart';
 
@@ -45,6 +46,7 @@ class LoginScreenState extends State<LoginScreen> {
       SesionActual.rol = session['rol'] ?? 'inquilino';
       SesionActual.todosLosRoles = List<String>.from(session['roles'] ?? []);
       SesionActual.publicId = session['public_id'];
+      SesionActual.stripeOnboardingCompleted = session['stripe_onboarding_completed'] ?? false;
 
       _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
     }
@@ -52,7 +54,10 @@ class LoginScreenState extends State<LoginScreen> {
 
   void _navigateByUserRole(String role, String userId) {
     final uid = int.tryParse(userId) ?? 0;
-    if (uid > 0) FCMService.initialize(uid);
+    if (uid > 0) {
+      FCMService.initialize(uid);
+      FirebaseChatService().subscribeToUserUpdates(uid);
+    }
 
     final normalizedRole = role.toLowerCase().trim();
 
@@ -109,6 +114,7 @@ class LoginScreenState extends State<LoginScreen> {
         SesionActual.rol = userData['rol'] ?? 'inquilino';
         SesionActual.todosLosRoles = List<String>.from(userData['roles'] ?? []);
         SesionActual.publicId = userData['public_id'];
+        SesionActual.stripeOnboardingCompleted = userData['stripe_onboarding_completed'] ?? false;
 
         if (SesionActual.usuarioId != null) {
           _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
@@ -148,6 +154,7 @@ class LoginScreenState extends State<LoginScreen> {
         SesionActual.rol = userData['rol'] ?? 'inquilino';
         SesionActual.todosLosRoles = List<String>.from(userData['roles'] ?? []);
         SesionActual.publicId = userData['public_id']?.toString();
+        SesionActual.stripeOnboardingCompleted = userData['stripe_onboarding_completed'] ?? false;
 
         if (SesionActual.usuarioId != null) {
           _navigateByUserRole(SesionActual.rol, SesionActual.usuarioId!);
@@ -417,7 +424,7 @@ class LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          StunningPageRoute(page: const RegisterScreen(rolInicial: 'inquilino')),
+                          StunningPageRoute(page: const RegisterScreen()),
                         );
                       },
                       child: RichText(

@@ -80,6 +80,7 @@ class AuthService {
             'rol': userRole,
             'roles': rolesList,
             'public_id': userData['id'].toString(),
+            'stripe_onboarding_completed': userData['stripe_onboarding_completed'] ?? false,
           },
         };
       }
@@ -206,6 +207,7 @@ class AuthService {
           'rol': userRole,
           'roles': rolesList,
           'public_id': userData['id'].toString(),
+          'stripe_onboarding_completed': userData['stripe_onboarding_completed'] ?? false,
         };
       }
     } catch (e) {
